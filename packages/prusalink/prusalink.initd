@@ -5,7 +5,7 @@ name="PrusaLink"
 description="Web interface and REST API for Prusa 3D printers"
 
 command="/usr/bin/prusalink"
-command_args="-c ${PRUSALINK_CONFIG:-/etc/prusalink/prusalink.ini}"
+command_args="-f -c ${PRUSALINK_CONFIG:-/etc/prusalink/prusalink.ini}"
 command_background="yes"
 pidfile="/run/${RC_SVCNAME}.pid"
 command_user="${PRUSALINK_USER:-prusalink}:${PRUSALINK_GROUP:-prusalink}"

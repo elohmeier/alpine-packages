@@ -1,0 +1,3 @@
+# Give dialout group access to serial ports for PrusaLink
+# ttyAMA0: Pi Zero GPIO UART (used for Einsy board connection)
+KERNEL=="ttyAMA0", GROUP="dialout", MODE="0660"
