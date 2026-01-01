@@ -20,6 +20,12 @@ depend() {
 }
 
 start_pre() {
+	# Trigger udev to apply rules to serial port (needed if device exists before udev starts)
+	if command -v udevadm >/dev/null 2>&1 && [ -c /dev/ttyAMA0 ]; then
+		udevadm trigger /dev/ttyAMA0 2>/dev/null || true
+		udevadm settle 2>/dev/null || true
+	fi
+
 	# Configure serial port for GPIO connection (Pi Zero via Einsy pins)
 	# Sets baudrate and disables hangup-on-close
 	if [ -c /dev/ttyAMA0 ]; then
