@@ -37,7 +37,7 @@ jobs:
           for pkg in packages/*/APKBUILD; do
             echo "Building $(dirname $pkg)..."
             cd "$(dirname $pkg)"
-            su builder -c "abuild -r"
+            su -s /bin/sh builder -c "abuild -r"
             cd - >/dev/null
           done
         shell: alpine.sh --root {0}
@@ -48,28 +48,28 @@ jobs:
           cp -r /home/builder/packages/*/* _site/packages/main/
           cp -r keys _site/
           cat > _site/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head><title>Alpine Packages</title></head>
-          <body>
-          <h1>Alpine Packages</h1>
-          <p>Custom Alpine Linux APK repository.</p>
-          <h2>Usage</h2>
-          <pre>
-          # Add signing key
-          wget -qO /etc/apk/keys/packages@elohmeier.rsa.pub \
-            https://elohmeier.github.io/alpine-packages/keys/packages@elohmeier.rsa.pub
+<!DOCTYPE html>
+<html>
+<head><title>Alpine Packages</title></head>
+<body>
+<h1>Alpine Packages</h1>
+<p>Custom Alpine Linux APK repository.</p>
+<h2>Usage</h2>
+<pre>
+# Add signing key
+wget -qO /etc/apk/keys/packages@elohmeier.rsa.pub \
+  https://elohmeier.github.io/alpine-packages/keys/packages@elohmeier.rsa.pub
 
-          # Add repository
-          echo "https://elohmeier.github.io/alpine-packages/packages/main" >> /etc/apk/repositories
+# Add repository
+echo "https://elohmeier.github.io/alpine-packages/packages/main" >> /etc/apk/repositories
 
-          # Install
-          apk update && apk add prusalink
-          </pre>
-          <p><a href="https://github.com/elohmeier/alpine-packages">Source</a></p>
-          </body>
-          </html>
-          EOF
+# Install
+apk update && apk add prusalink
+</pre>
+<p><a href="https://github.com/elohmeier/alpine-packages">Source</a></p>
+</body>
+</html>
+EOF
         shell: alpine.sh --root {0}
 
       - name: Upload artifact
