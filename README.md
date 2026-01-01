@@ -15,8 +15,8 @@ Add this repository to your Alpine system:
 wget -qO /etc/apk/keys/packages@elohmeier.rsa.pub \
   https://raw.githubusercontent.com/elohmeier/alpine-packages/main/keys/packages@elohmeier.rsa.pub
 
-# Add the repository
-echo "https://elohmeier.github.io/alpine-packages/packages/main/armhf" >> /etc/apk/repositories
+# Add the repository (APK appends the architecture automatically)
+echo "https://elohmeier.github.io/alpine-packages/packages/main" >> /etc/apk/repositories
 
 # Update and install prusalink
 apk update

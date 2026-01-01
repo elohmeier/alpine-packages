@@ -9,97 +9,83 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch: [armhf]
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Alpine Linux
         uses: jirutka/setup-alpine@v1
         with:
-          arch: ${{ matrix.arch }}
+          arch: armhf
           branch: v3.23
-          packages: alpine-sdk sudo
+          packages: alpine-sdk
 
       - name: Setup build environment
         run: |
           adduser -D builder
           addgroup builder abuild
-          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-          mkdir -p /var/cache/distfiles
-          chown builder:builder /var/cache/distfiles
-          chown -R builder:builder .
-        shell: alpine.sh --root {0}
-
-      - name: Import signing key
-        run: |
-          mkdir -p /home/builder/.abuild
+          mkdir -p /var/cache/distfiles /home/builder/.abuild
           echo "${{ secrets.ABUILD_PRIVKEY }}" > /home/builder/.abuild/packages@elohmeier.rsa
           cp keys/packages@elohmeier.rsa.pub /home/builder/.abuild/
           cp keys/packages@elohmeier.rsa.pub /etc/apk/keys/
           echo "PACKAGER_PRIVKEY=/home/builder/.abuild/packages@elohmeier.rsa" > /home/builder/.abuild/abuild.conf
           chmod 600 /home/builder/.abuild/packages@elohmeier.rsa
-          chown -R builder:builder /home/builder/.abuild
+          chown -R builder:builder /var/cache/distfiles /home/builder .
         shell: alpine.sh --root {0}
 
       - name: Build packages
         run: |
-          cd packages
-          for pkg in */APKBUILD; do
-            dir=$(dirname "$pkg")
-            echo "Building $dir..."
-            cd "$dir"
-            sudo -u builder abuild -r
-            cd ..
+          for pkg in packages/*/APKBUILD; do
+            echo "Building $(dirname $pkg)..."
+            cd "$(dirname $pkg)"
+            su builder -c "abuild -r"
+            cd - >/dev/null
           done
-        shell: alpine.sh {0}
+        shell: alpine.sh --root {0}
 
       - name: Collect packages
         run: |
-          mkdir -p repo/${{ matrix.arch }}
-          cp -r /home/builder/packages/*/${{ matrix.arch }}/* repo/${{ matrix.arch }}/ 2>/dev/null || true
+          mkdir -p _site/packages/main
+          cp -r /home/builder/packages/*/* _site/packages/main/
+          cp -r keys _site/
+          cat > _site/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head><title>Alpine Packages</title></head>
+          <body>
+          <h1>Alpine Packages</h1>
+          <p>Custom Alpine Linux APK repository.</p>
+          <h2>Usage</h2>
+          <pre>
+          # Add signing key
+          wget -qO /etc/apk/keys/packages@elohmeier.rsa.pub \
+            https://elohmeier.github.io/alpine-packages/keys/packages@elohmeier.rsa.pub
+
+          # Add repository
+          echo "https://elohmeier.github.io/alpine-packages/packages/main" >> /etc/apk/repositories
+
+          # Install
+          apk update && apk add prusalink
+          </pre>
+          <p><a href="https://github.com/elohmeier/alpine-packages">Source</a></p>
+          </body>
+          </html>
+          EOF
         shell: alpine.sh --root {0}
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: packages-${{ matrix.arch }}
-          path: repo/
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
 
   publish:
     needs: build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
       pages: write
       id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: repo
-          pattern: packages-*
-          merge-multiple: true
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Prepare pages content
-        run: |
-          mkdir -p _site/packages/main
-          cp -r repo/* _site/packages/main/ 2>/dev/null || true
-          cp -r keys _site/
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
