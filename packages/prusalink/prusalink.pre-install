@@ -1,0 +1,13 @@
+#!/bin/sh
+
+# Create prusalink user and group if they don't exist
+addgroup -S prusalink 2>/dev/null || true
+adduser -S -D -H -h /var/lib/prusalink -s /sbin/nologin -G prusalink \
+    -g "PrusaLink daemon" prusalink 2>/dev/null || true
+
+# Add prusalink user to groups for hardware access
+addgroup prusalink dialout 2>/dev/null || true  # Serial ports
+addgroup prusalink video 2>/dev/null || true    # Camera access
+addgroup prusalink plugdev 2>/dev/null || true  # USB devices
+
+exit 0

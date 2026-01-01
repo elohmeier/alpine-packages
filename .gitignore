@@ -1,0 +1,14 @@
+# Build artifacts
+*.apk
+src/
+pkg/
+.dist/
+
+# abuild
+/packages/*/src/
+/packages/*/pkg/
+/packages/*/.dist/
+
+# Keys (private)
+*.rsa
+!*.rsa.pub

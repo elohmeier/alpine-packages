@@ -1,0 +1,147 @@
+# Contributor: PrusaLink Developers <link@prusa3d.cz>
+# Maintainer: PrusaLink Developers <link@prusa3d.cz>
+pkgname=prusalink
+pkgver=0.8.1
+pkgrel=6
+install="$pkgname.pre-install $pkgname.post-install"
+pkgdesc="Web interface and REST API for Prusa 3D printers with PrusaConnect integration"
+url="https://github.com/prusa3d/Prusa-Link"
+arch="all"
+license="Freeware"
+depends="
+	python3
+	py3-numpy
+	libjpeg-turbo
+	libturbojpeg
+	libcap2
+	libmagic
+	eudev-libs
+	yaml
+	"
+makedepends="
+	py3-pip
+	py3-setuptools
+	py3-wheel
+	py3-numpy
+	python3-dev
+	libjpeg-turbo-dev
+	libcap-dev
+	linux-headers
+	libffi-dev
+	yaml-dev
+	"
+# OpenRC files included in main package
+source="
+	https://files.pythonhosted.org/packages/source/p/prusalink/prusalink-$pkgver.tar.gz
+	prusalink.initd
+	prusalink.confd
+	prusalink.ini
+	prusalink.pre-install
+	prusalink.post-install
+	"
+options="!check net"  # Tests require hardware; net needed for pip
+
+# Pin pydantic to 1.x as prusalink is not compatible with 2.x
+_pydantic_version="1.10.12"
+
+build() {
+	# Create a wheel for prusalink
+	python3 -m pip wheel --no-deps --wheel-dir .dist .
+
+	# Download and build all dependencies into wheels
+	# Note: numpy is excluded - use system py3-numpy package instead (much faster on ARM)
+	# Use --no-binary for packages that incorrectly download armv7 wheels on armv6
+	python3 -m pip wheel \
+		--wheel-dir .dist \
+		--no-binary charset_normalizer,zeroconf \
+		"pydantic==$_pydantic_version" \
+		"prusa.connect.sdk.printer>=0.8.1" \
+		"py-gcode-metadata" \
+		"bidict~=0.22.1" \
+		"extendparser~=0.3.1" \
+		"jinja2-template-info~=0.2.4" \
+		"lockfile~=0.12.2" \
+		"packaging~=23.0" \
+		"PoorWSGI~=2.5.0" \
+		"pyric~=0.1.6.3" \
+		"python-daemon~=3.0.1" \
+		"python-prctl~=1.8.1" \
+		"pyudev~=0.24.0" \
+		"PyYAML~=6.0" \
+		"requests>=2.31.0" \
+		"sortedcontainers~=2.4.0" \
+		"unidecode~=1.3.6" \
+		"validators~=0.20.0" \
+		"zeroconf~=0.47.4" \
+		"blinker~=1.5" \
+		"python-magic~=0.4.27" \
+		"Jinja2>=3.0"
+
+	# Build PyTurboJPEG separately without its numpy dependency
+	# (numpy is provided by system py3-numpy)
+	python3 -m pip wheel --no-deps --wheel-dir .dist "PyTurboJPEG~=1.7.0"
+}
+
+package() {
+	local pyver=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+	local sitepkgs="$pkgdir/usr/lib/python$pyver/site-packages"
+
+	# Install all wheels (dependencies + prusalink)
+	python3 -m pip install \
+		--no-deps \
+		--no-compile \
+		--target "$sitepkgs" \
+		.dist/*.whl
+
+	# Byte-compile Python files
+	python3 -m compileall -q "$sitepkgs" || true
+
+	# Create bin directory and install entry points
+	install -dm755 "$pkgdir"/usr/bin
+
+	# Create prusalink entry point
+	cat > "$pkgdir"/usr/bin/prusalink << 'EOF'
+#!/usr/bin/python3
+import sys
+from prusa.link.__main__ import main
+sys.exit(main())
+EOF
+	chmod 755 "$pkgdir"/usr/bin/prusalink
+
+	# Create prusalink-manager entry point
+	cat > "$pkgdir"/usr/bin/prusalink-manager << 'EOF'
+#!/usr/bin/python3
+import sys
+from prusa.link.multi_instance.__main__ import main
+sys.exit(main())
+EOF
+	chmod 755 "$pkgdir"/usr/bin/prusalink-manager
+
+	# Install prusalink-boot script from package data
+	if [ -f "$sitepkgs/prusa/link/data/prusalink-boot" ]; then
+		install -Dm755 "$sitepkgs/prusa/link/data/prusalink-boot" \
+			"$pkgdir"/usr/bin/prusalink-boot
+	fi
+
+	# Install OpenRC init script
+	install -Dm755 "$srcdir"/prusalink.initd "$pkgdir"/etc/init.d/prusalink
+	install -Dm644 "$srcdir"/prusalink.confd "$pkgdir"/etc/conf.d/prusalink
+
+	# Create configuration directory and install Alpine-specific config
+	install -dm755 "$pkgdir"/etc/prusalink
+	install -Dm644 "$srcdir"/prusalink.ini "$pkgdir"/etc/prusalink/prusalink.ini.example
+
+	# Create data directory (ownership set by post-install script)
+	# Logs go to syslog, not files - view with: logread | grep prusalink
+	install -dm755 "$pkgdir"/var/lib/prusalink
+	install -dm755 "$pkgdir"/var/lib/prusalink/gcodes
+}
+
+sha512sums="
+SKIP  prusalink-0.8.1.tar.gz
+SKIP  prusalink.initd
+SKIP  prusalink.confd
+SKIP  prusalink.ini
+SKIP  prusalink.pre-install
+SKIP  prusalink.post-install
+"

@@ -1,0 +1,52 @@
+#!/sbin/openrc-run
+# OpenRC init script for PrusaLink
+
+name="PrusaLink"
+description="Web interface and REST API for Prusa 3D printers"
+
+command="/usr/bin/prusalink"
+command_args="-c ${PRUSALINK_CONFIG:-/etc/prusalink/prusalink.ini}"
+command_background="yes"
+pidfile="/run/${RC_SVCNAME}.pid"
+command_user="${PRUSALINK_USER:-prusalink}:${PRUSALINK_GROUP:-prusalink}"
+
+# Log to files since syslog may not be available
+output_log="/var/log/prusalink.log"
+error_log="/var/log/prusalink.err"
+
+depend() {
+	need net
+	after firewall
+}
+
+start_pre() {
+	# Ensure data directory exists and is writable
+	checkpath --directory --owner "${PRUSALINK_USER:-prusalink}:${PRUSALINK_GROUP:-prusalink}" \
+		--mode 0755 /var/lib/prusalink
+
+	# Ensure gcodes directory exists
+	checkpath --directory --owner "${PRUSALINK_USER:-prusalink}:${PRUSALINK_GROUP:-prusalink}" \
+		--mode 0755 /var/lib/prusalink/gcodes
+
+	# Ensure log files exist and are writable
+	checkpath --file --owner "${PRUSALINK_USER:-prusalink}:${PRUSALINK_GROUP:-prusalink}" \
+		--mode 0644 /var/log/prusalink.log
+	checkpath --file --owner "${PRUSALINK_USER:-prusalink}:${PRUSALINK_GROUP:-prusalink}" \
+		--mode 0644 /var/log/prusalink.err
+
+	# Check for configuration file
+	local config_file="${PRUSALINK_CONFIG:-/etc/prusalink/prusalink.ini}"
+	if [ ! -f "$config_file" ]; then
+		eerror "Configuration file not found at $config_file"
+		eerror "Copy /etc/prusalink/prusalink.ini.example and configure it:"
+		eerror "  cp /etc/prusalink/prusalink.ini.example /etc/prusalink/prusalink.ini"
+		eerror "  vi /etc/prusalink/prusalink.ini"
+		return 1
+	fi
+}
+
+start_post() {
+	einfo "PrusaLink started."
+	einfo "Logs: /var/log/prusalink.log"
+	einfo "Errors: /var/log/prusalink.err"
+}

@@ -1,0 +1,12 @@
+# Configuration for PrusaLink
+
+# User and group to run PrusaLink as
+#PRUSALINK_USER="prusalink"
+#PRUSALINK_GROUP="prusalink"
+
+# Path to configuration file
+#PRUSALINK_CONFIG="/etc/prusalink/prusalink.ini"
+
+# Additional options to pass to prusalink
+# See 'prusalink --help' for available options
+#PRUSALINK_OPTS="-c /etc/prusalink/prusalink.ini"
