@@ -16,7 +16,7 @@ wget -qO /etc/apk/keys/packages@elohmeier.rsa.pub \
   https://raw.githubusercontent.com/elohmeier/alpine-packages/main/keys/packages@elohmeier.rsa.pub
 
 # Add the repository (APK appends the architecture automatically)
-echo "https://elohmeier.github.io/alpine-packages/packages/main" >> /etc/apk/repositories
+echo "https://elohmeier.github.io/alpine-packages" >> /etc/apk/repositories
 
 # Update and install prusalink
 apk update

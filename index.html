@@ -11,7 +11,7 @@ wget -qO /etc/apk/keys/packages@elohmeier.rsa.pub \
   https://elohmeier.github.io/alpine-packages/keys/packages@elohmeier.rsa.pub
 
 # Add repository
-echo "https://elohmeier.github.io/alpine-packages/packages/main" >> /etc/apk/repositories
+echo "https://elohmeier.github.io/alpine-packages" >> /etc/apk/repositories
 
 # Install
 apk update && apk add prusalink

@@ -44,8 +44,8 @@ jobs:
 
       - name: Collect packages
         run: |
-          mkdir -p _site/packages/main
-          cp -r /home/builder/packages/*/* _site/packages/main/
+          mkdir -p _site
+          cp -r /home/builder/packages/*/* _site/
           cp -r keys _site/
           cp index.html _site/
         shell: alpine.sh --root {0}
