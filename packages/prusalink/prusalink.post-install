@@ -22,6 +22,16 @@ if [ ! -f /etc/prusalink/prusalink.ini ] && [ -f /etc/prusalink/prusalink.ini.ex
     echo "To start on boot:"
     echo "  rc-update add prusalink default"
     echo ""
+    echo "==> For Pi Zero GPIO connection to MK3S+ (Einsy board pins):"
+    echo ""
+    echo "Add to /boot/usercfg.txt:"
+    echo "  [all]"
+    echo "  enable_uart=1"
+    echo "  dtoverlay=disable-bt"
+    echo ""
+    echo "This enables the full UART and disables Bluetooth to free it."
+    echo "Reboot after making these changes."
+    echo ""
 fi
 
 exit 0

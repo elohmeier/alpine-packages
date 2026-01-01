@@ -20,6 +20,12 @@ depend() {
 }
 
 start_pre() {
+	# Configure serial port for GPIO connection (Pi Zero via Einsy pins)
+	# Sets baudrate and disables hangup-on-close
+	if [ -c /dev/ttyAMA0 ]; then
+		stty -F /dev/ttyAMA0 115200 -hupcl 2>/dev/null || true
+	fi
+
 	# Ensure data directory exists and is writable
 	checkpath --directory --owner "${PRUSALINK_USER:-prusalink}:${PRUSALINK_GROUP:-prusalink}" \
 		--mode 0755 /var/lib/prusalink
