@@ -35,6 +35,8 @@ jobs:
         run: |
           mkdir -p /home/builder/.abuild
           echo "${{ secrets.ABUILD_PRIVKEY }}" > /home/builder/.abuild/packages@elohmeier.rsa
+          cp keys/packages@elohmeier.rsa.pub /home/builder/.abuild/
+          cp keys/packages@elohmeier.rsa.pub /etc/apk/keys/
           echo "PACKAGER_PRIVKEY=/home/builder/.abuild/packages@elohmeier.rsa" > /home/builder/.abuild/abuild.conf
           chmod 600 /home/builder/.abuild/packages@elohmeier.rsa
           chown -R builder:builder /home/builder/.abuild
