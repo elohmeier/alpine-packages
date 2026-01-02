@@ -1,0 +1,13 @@
+repos:
+  - repo: local
+    hooks:
+      - id: prusalink-abuild-checksum
+        name: prusalink abuild checksum (docker)
+        entry: >
+          sh -lc 'docker run --rm
+          -v "$PWD:/workspace"
+          -w /workspace/packages/prusalink
+          alpine:latest
+          sh -lc "apk add --no-cache alpine-sdk > /dev/null && abuild -F checksum"'
+        language: system
+        stages: [pre-push]
