@@ -2,7 +2,7 @@
 # Maintainer: PrusaLink Developers <link@prusa3d.cz>
 pkgname=prusalink
 pkgver=0.8.1
-pkgrel=8
+pkgrel=9
 install="$pkgname.pre-install $pkgname.post-install"
 pkgdesc="Web interface and REST API for Prusa 3D printers with PrusaConnect integration"
 url="https://github.com/prusa3d/Prusa-Link"
@@ -144,7 +144,7 @@ EOF
 
 sha512sums="
 c4339a0a5f9cb988d03e94ea5d64ec306401333d51a58651450a97acaf4fe401472e4fd4db438582e4d97d69de301c83f5a5be36d54df8614477c3923a0606b7  prusalink-0.8.1.tar.gz
-9db1e576c32d0352c7f06e9ae1805e3e9af2db6867d7976df87abe76036590ca981335f5692ea15b9c7d3acc23b5c452b3bb1068fb15d3687a21ea202364bf03  prusalink.initd
+d488e2ff5d74536e94a5d432d7aa4bf8f67ce6e8561b2ef847583c8f04203b7763b222bcad46fd638f860b42bb2e05ccc863f32a38eb46f7f72c69472187215b  prusalink.initd
 2d6eef72808d1af3676c9efe46e923e4e505c1e6490ae24662befade564527e71e68d8ccad28ce8ffaafcc76a0a2c793e617585efe227a2bdd4d9a7272c0342d  prusalink.confd
 1ceb1a61b1ba4cc6ccd51d4d9baa7f707f1d6c00c3b03c1ac118f44c4aac8ecbc6d7c54510d86463041b12c2a6bfda50fb9d4c5452d41d2c5dfe4329668e214c  prusalink.ini
 5694f50c3a888d7f9bae2dc95595934d34195c6c368cc145245dad9047a3eeadc76d7d96508edec383caaa31cdacf1e7e7fe9ef56fadcc398c727c15bc0d98f7  prusalink.pre-install
