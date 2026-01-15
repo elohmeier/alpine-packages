@@ -1,0 +1,28 @@
+#!/sbin/openrc-run
+
+name="matter-server"
+description="Open Home Foundation Matter Server"
+
+command="/usr/bin/matter-server"
+command_args="$MATTER_SERVER_OPTS"
+command_user="${MATTER_USER:-matter}"
+command_background=true
+pidfile="/run/${RC_SVCNAME}.pid"
+output_log="/var/log/${RC_SVCNAME}.log"
+error_log="/var/log/${RC_SVCNAME}.log"
+
+depend() {
+	need net
+	after firewall avahi-daemon
+}
+
+start_pre() {
+	# Ensure data directory exists with correct ownership
+	checkpath --directory --owner "$command_user" /var/lib/matter-server
+
+	# Check IPv6 is enabled (required for Matter)
+	if [ ! -d /proc/sys/net/ipv6 ]; then
+		eerror "IPv6 is required for Matter but appears to be disabled"
+		return 1
+	fi
+}

@@ -1,0 +1,129 @@
+# Contributor: Enno Lohmeier <enno@elohmeier.de>
+# Maintainer: Enno Lohmeier <enno@elohmeier.de>
+pkgname=matter-server
+pkgver=8.1.2
+pkgrel=0
+pkgdesc="Open Home Foundation Matter Server - WebSocket-based Matter controller"
+url="https://github.com/home-assistant-libs/python-matter-server"
+arch="x86_64 aarch64"  # Only archs with prebuilt CHIP wheels
+license="Apache-2.0"
+depends="
+	python3
+	gcompat
+	libuv
+	zlib
+	json-c
+	libnl3
+	"
+makedepends="
+	py3-pip
+	py3-setuptools
+	py3-wheel
+	python3-dev
+	libffi-dev
+	yaml-dev
+	unzip
+	"
+install="$pkgname.pre-install"
+source="
+	$pkgname-$pkgver.tar.gz::https://github.com/home-assistant-libs/python-matter-server/archive/refs/tags/$pkgver.tar.gz
+	matter-server.initd
+	matter-server.confd
+	"
+options="!check !tracedeps net"  # Tests require hardware; net needed for pip; tracedeps disabled for bundled glibc libs
+
+# CHIP SDK version matching the python-matter-server release
+_chip_version="2025.7.0"
+
+build() {
+	cd "$srcdir/python-matter-server-$pkgver"
+
+	# Create a wheel for matter-server
+	python3 -m pip wheel --no-deps --wheel-dir "$srcdir/.dist" .
+
+	# Determine platform for CHIP wheels
+	case "$CARCH" in
+		x86_64) _plat="manylinux_2_31_x86_64" ;;
+		aarch64) _plat="manylinux_2_31_aarch64" ;;
+	esac
+
+	# Download CHIP wheels (glibc-based, will use gcompat)
+	# Must use pip download with explicit platform since Alpine is musl
+	# Use --no-deps to avoid pulling glibc-only transitive deps
+	python3 -m pip download \
+		--dest "$srcdir/.dist" \
+		--only-binary :all: \
+		--no-deps \
+		--platform "$_plat" \
+		--python-version 312 \
+		--implementation cp \
+		--abi cp312 \
+		"home-assistant-chip-core==$_chip_version" \
+		"home-assistant-chip-clusters==$_chip_version"
+
+	# Download/build all other dependencies (including CHIP transitive deps)
+	python3 -m pip wheel \
+		--wheel-dir "$srcdir/.dist" \
+		"aiohttp>=3.9.0" \
+		"aiorun>=2024.5.1" \
+		"coloredlogs>=15.0" \
+		"orjson>=3.9.0" \
+		"cryptography>=42.0.0" \
+		"zeroconf>=0.131.0" \
+		"atomicwrites>=1.4.0" \
+		"pyyaml>=6.0" \
+		"construct>=2.10" \
+		"dacite>=1.8" \
+		"rich>=13.0"
+}
+
+package() {
+	local pyver=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+	local sitepkgs="$pkgdir/usr/lib/python$pyver/site-packages"
+	mkdir -p "$sitepkgs"
+
+	# Install CHIP wheels manually (bypassing pip platform check)
+	# These are glibc wheels that will work with gcompat
+	for whl in "$srcdir"/.dist/home_assistant_chip*.whl; do
+		unzip -o -q "$whl" -d "$sitepkgs"
+	done
+
+	# Install other wheels normally
+	for whl in "$srcdir"/.dist/*.whl; do
+		case "$whl" in
+			*home_assistant_chip*) continue ;;  # Already installed
+		esac
+		python3 -m pip install \
+			--no-deps \
+			--no-compile \
+			--target "$sitepkgs" \
+			"$whl"
+	done
+
+	# Byte-compile Python files
+	python3 -m compileall -q "$sitepkgs" || true
+
+	# Create bin directory and install entry point
+	install -dm755 "$pkgdir"/usr/bin
+
+	cat > "$pkgdir"/usr/bin/matter-server << 'EOF'
+#!/usr/bin/python3
+import sys
+from matter_server.server.__main__ import main
+sys.exit(main())
+EOF
+	chmod 755 "$pkgdir"/usr/bin/matter-server
+
+	# Install OpenRC init script
+	install -Dm755 "$srcdir"/matter-server.initd "$pkgdir"/etc/init.d/matter-server
+	install -Dm644 "$srcdir"/matter-server.confd "$pkgdir"/etc/conf.d/matter-server
+
+	# Create data directory
+	install -dm755 "$pkgdir"/var/lib/matter-server
+}
+
+sha512sums="
+b4d2300dd939eb6ce3589902ff8fbd803c3b6fb3a5accc6d427b3e468efc6797656e492cc13df61c04de101725d8a998a1d810b467c60017611b51c3a3f9aa87  matter-server-8.1.2.tar.gz
+429387ccd820f480546ca58dd306e6a68cf78ade5b104948b8300e4c5e579a2ae0caf8c68bd2c649251262c44bae9f38df44faf8d80c546c75130f1179302e51  matter-server.initd
+0ac92ae7cfa09d1b67d4bb9bf69c43e5cb4d4f9f2f43a2e642717b965694df20c1a79b6af657bdc9d52f31c04d02c880afedf898a0b53c5c69b3657259a11b89  matter-server.confd
+"

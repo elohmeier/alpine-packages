@@ -1,0 +1,26 @@
+# Matter Server configuration
+
+# User to run as
+MATTER_USER="matter"
+
+# Storage path for Matter fabric data
+MATTER_STORAGE="/var/lib/matter-server"
+
+# WebSocket server port
+MATTER_PORT="5580"
+
+# Network interface for link-local addresses (optional)
+# MATTER_INTERFACE="eth0"
+
+# Log level: critical, error, warning, info, debug, verbose
+MATTER_LOG_LEVEL="info"
+
+# Server options
+# See: matter-server --help
+MATTER_SERVER_OPTS="--storage-path $MATTER_STORAGE --port $MATTER_PORT --log-level $MATTER_LOG_LEVEL"
+
+# Uncomment to bind to specific interface
+# MATTER_SERVER_OPTS="$MATTER_SERVER_OPTS --primary-interface $MATTER_INTERFACE"
+
+# Uncomment to enable Bluetooth commissioning (requires bluetooth adapter)
+# MATTER_SERVER_OPTS="$MATTER_SERVER_OPTS --bluetooth-adapter 0"
