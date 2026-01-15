@@ -11,6 +11,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # Need history for git diff
+
+      - name: Detect changed packages
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE=${{ github.event.pull_request.base.sha }}
+          else
+            BASE=${{ github.event.before }}
+          fi
+          # Handle initial commit or force push
+          if ! git cat-file -e "$BASE" 2>/dev/null; then
+            echo "Building all packages (no valid base commit)"
+            echo "packages=$(ls -d packages/*/APKBUILD | xargs -n1 dirname | xargs -n1 basename | tr '\n' ' ')" >> $GITHUB_OUTPUT
+            echo "build_all=true" >> $GITHUB_OUTPUT
+          else
+            CHANGED=$(git diff --name-only "$BASE" "${{ github.sha }}" | grep '^packages/' | cut -d/ -f2 | sort -u | tr '\n' ' ')
+            echo "Changed packages: $CHANGED"
+            echo "packages=$CHANGED" >> $GITHUB_OUTPUT
+            echo "build_all=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download existing packages
+        if: steps.changes.outputs.build_all != 'true'
+        run: |
+          mkdir -p _site
+          # Download existing packages from GitHub Pages
+          wget -q -r -np -nH -P _site \
+            --accept "*.apk,APKINDEX.tar.gz,*.rsa.pub" \
+            https://elohmeier.github.io/alpine-packages/armhf/ 2>/dev/null || echo "No existing packages found"
+          ls -la _site/ || true
 
       - name: Setup Alpine Linux
         uses: jirutka/setup-alpine@v1
@@ -32,20 +64,28 @@ jobs:
           chown -R builder:builder /var/cache/distfiles /home/builder .
         shell: alpine.sh --root {0}
 
-      - name: Build packages
+      - name: Build changed packages
         run: |
+          CHANGED_PKGS="${{ steps.changes.outputs.packages }}"
           for pkg in packages/*/APKBUILD; do
-            echo "Building $(dirname $pkg)..."
-            cd "$(dirname $pkg)"
-            su -s /bin/sh builder -c "abuild -r"
-            cd - >/dev/null
+            pkgname=$(dirname "$pkg" | xargs basename)
+            if [ -z "$CHANGED_PKGS" ] || echo "$CHANGED_PKGS" | grep -qw "$pkgname"; then
+              echo "::group::Building $pkgname"
+              cd "$(dirname $pkg)"
+              su -s /bin/sh builder -c "abuild -r"
+              cd - >/dev/null
+              echo "::endgroup::"
+            else
+              echo "Skipping $pkgname (unchanged)"
+            fi
           done
         shell: alpine.sh --root {0}
 
       - name: Collect packages
         run: |
           mkdir -p _site
-          cp -r /home/builder/packages/*/* _site/
+          # Copy newly built packages (overwrites any downloaded ones)
+          cp -r /home/builder/packages/*/* _site/ 2>/dev/null || true
           cp -r keys _site/
           cp index.html _site/
         shell: alpine.sh --root {0}
