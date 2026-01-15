@@ -7,12 +7,15 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  detect-changes:
     runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.changes.outputs.packages }}
+      build_all: ${{ steps.changes.outputs.build_all }}
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2  # Need history for git diff
+          fetch-depth: 2
 
       - name: Detect changed packages
         id: changes
@@ -34,20 +37,30 @@ jobs:
             echo "build_all=false" >> $GITHUB_OUTPUT
           fi
 
+  build:
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [armhf, aarch64, x86_64]
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Download existing packages
-        if: steps.changes.outputs.build_all != 'true'
+        if: needs.detect-changes.outputs.build_all != 'true'
         run: |
-          mkdir -p _site
-          # Download existing packages from GitHub Pages
+          mkdir -p _site/${{ matrix.arch }}
+          # Download existing packages from GitHub Pages for this architecture
           wget -q -r -np -nH -P _site \
-            --accept "*.apk,APKINDEX.tar.gz,*.rsa.pub" \
-            https://elohmeier.github.io/alpine-packages/armhf/ 2>/dev/null || echo "No existing packages found"
-          ls -la _site/ || true
+            --accept "*.apk,APKINDEX.tar.gz" \
+            https://elohmeier.github.io/alpine-packages/${{ matrix.arch }}/ 2>/dev/null || echo "No existing packages found for ${{ matrix.arch }}"
+          ls -la _site/${{ matrix.arch }}/ || true
 
       - name: Setup Alpine Linux
         uses: jirutka/setup-alpine@v1
         with:
-          arch: armhf
+          arch: ${{ matrix.arch }}
           branch: v3.23
           packages: alpine-sdk
 
@@ -64,41 +77,61 @@ jobs:
           chown -R builder:builder /var/cache/distfiles /home/builder .
         shell: alpine.sh --root {0}
 
-      - name: Build changed packages
+      - name: Build packages for ${{ matrix.arch }}
         run: |
-          CHANGED_PKGS="${{ steps.changes.outputs.packages }}"
-          BUILD_ALL="${{ steps.changes.outputs.build_all }}"
-
-          if [ "$BUILD_ALL" != "true" ] && [ -z "$CHANGED_PKGS" ]; then
-            echo "No packages changed, skipping all builds"
-            exit 0
-          fi
+          CHANGED_PKGS="${{ needs.detect-changes.outputs.packages }}"
+          BUILD_ALL="${{ needs.detect-changes.outputs.build_all }}"
+          ARCH="${{ matrix.arch }}"
+          BUILT_SOMETHING=false
 
           for pkg in packages/*/APKBUILD; do
             pkgname=$(dirname "$pkg" | xargs basename)
-            if [ "$BUILD_ALL" = "true" ] || echo "$CHANGED_PKGS" | grep -qw "$pkgname"; then
-              echo "::group::Building $pkgname"
-              cd "$(dirname $pkg)"
-              su -s /bin/sh builder -c "abuild -r"
-              cd - >/dev/null
-              echo "::endgroup::"
-            else
-              echo "Skipping $pkgname (unchanged)"
+
+            # Extract arch field from APKBUILD
+            pkg_arch=$(grep '^arch=' "$pkg" | sed 's/arch=//;s/"//g')
+
+            # Check if package supports this architecture
+            if ! echo "$pkg_arch" | grep -qE "(all|noarch|$ARCH)"; then
+              echo "Skipping $pkgname (arch '$pkg_arch' does not support $ARCH)"
+              continue
             fi
+
+            # Check if package changed (unless building all)
+            if [ "$BUILD_ALL" != "true" ] && [ -n "$CHANGED_PKGS" ]; then
+              if ! echo "$CHANGED_PKGS" | grep -qw "$pkgname"; then
+                echo "Skipping $pkgname (unchanged)"
+                continue
+              fi
+            elif [ "$BUILD_ALL" != "true" ] && [ -z "$CHANGED_PKGS" ]; then
+              echo "No packages changed, skipping all builds"
+              break
+            fi
+
+            echo "::group::Building $pkgname for $ARCH"
+            cd "$(dirname $pkg)"
+            su -s /bin/sh builder -c "abuild -r"
+            cd - >/dev/null
+            BUILT_SOMETHING=true
+            echo "::endgroup::"
           done
+
+          echo "built_something=$BUILT_SOMETHING" >> $GITHUB_ENV
         shell: alpine.sh --root {0}
 
       - name: Collect packages
         run: |
-          mkdir -p _site
+          mkdir -p _site/${{ matrix.arch }}
           # Copy newly built packages (overwrites any downloaded ones)
-          cp -r /home/builder/packages/*/* _site/ 2>/dev/null || true
-          cp -r keys _site/
-          cp index.html _site/
+          cp -r /home/builder/packages/*/* _site/${{ matrix.arch }}/ 2>/dev/null || true
+          ls -la _site/${{ matrix.arch }}/ || echo "No packages in _site/${{ matrix.arch }}/"
         shell: alpine.sh --root {0}
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}
+          path: _site/${{ matrix.arch }}
+          if-no-files-found: ignore
 
   publish:
     needs: build
@@ -111,6 +144,35 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: _site
+          pattern: packages-*
+          merge-multiple: false
+
+      - name: Prepare site
+        run: |
+          # Rename artifact directories (packages-armhf -> armhf)
+          for dir in _site/packages-*; do
+            if [ -d "$dir" ]; then
+              arch=${dir#_site/packages-}
+              mv "$dir" "_site/$arch"
+              echo "Moved $dir to _site/$arch"
+            fi
+          done
+          # Copy keys and index
+          cp -r keys _site/
+          cp index.html _site/
+          # Show final structure
+          echo "Final site structure:"
+          find _site -type f | head -50
+
+      - name: Upload pages artifact
+        uses: actions/upload-pages-artifact@v3
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
