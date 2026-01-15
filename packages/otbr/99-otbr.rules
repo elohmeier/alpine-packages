@@ -1,0 +1,2 @@
+# OpenThread Border Router radio device permissions
+KERNEL=="ttyACM0", GROUP="dialout", MODE="0660"

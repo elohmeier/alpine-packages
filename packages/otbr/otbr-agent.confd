@@ -1,0 +1,16 @@
+# OpenThread Border Router configuration
+
+# User to run the agent as (root required for network configuration)
+OTBR_USER="root"
+
+# Thread radio device path
+OTBR_RADIO_DEVICE="/dev/ttyACM0"
+
+# Thread network interface name
+OTBR_THREAD_IF="wpan0"
+
+# Infrastructure/backbone interface (Wi-Fi or Ethernet)
+OTBR_INFRA_IF="eth0"
+
+# Agent options: -I <thread_if> -B <backbone_if> <radio_url>
+OTBR_AGENT_OPTS="-I $OTBR_THREAD_IF -B $OTBR_INFRA_IF spinel+hdlc+uart://$OTBR_RADIO_DEVICE"

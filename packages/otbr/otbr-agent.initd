@@ -1,0 +1,25 @@
+#!/sbin/openrc-run
+
+name="otbr-agent"
+description="OpenThread Border Router Agent"
+
+command="/usr/sbin/otbr-agent"
+command_args="$OTBR_AGENT_OPTS"
+command_user="${OTBR_USER:-root}"
+pidfile="/run/${RC_SVCNAME}.pid"
+command_background=true
+
+depend() {
+	need net
+	after firewall
+}
+
+start_pre() {
+	# Ensure radio device exists
+	if [ -n "$OTBR_RADIO_DEVICE" ] && [ ! -c "$OTBR_RADIO_DEVICE" ]; then
+		eerror "Radio device $OTBR_RADIO_DEVICE not found"
+		return 1
+	fi
+
+	checkpath --directory --owner "$command_user" /var/lib/otbr
+}
