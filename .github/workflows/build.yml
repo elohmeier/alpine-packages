@@ -67,9 +67,16 @@ jobs:
       - name: Build changed packages
         run: |
           CHANGED_PKGS="${{ steps.changes.outputs.packages }}"
+          BUILD_ALL="${{ steps.changes.outputs.build_all }}"
+
+          if [ "$BUILD_ALL" != "true" ] && [ -z "$CHANGED_PKGS" ]; then
+            echo "No packages changed, skipping all builds"
+            exit 0
+          fi
+
           for pkg in packages/*/APKBUILD; do
             pkgname=$(dirname "$pkg" | xargs basename)
-            if [ -z "$CHANGED_PKGS" ] || echo "$CHANGED_PKGS" | grep -qw "$pkgname"; then
+            if [ "$BUILD_ALL" = "true" ] || echo "$CHANGED_PKGS" | grep -qw "$pkgname"; then
               echo "::group::Building $pkgname"
               cd "$(dirname $pkg)"
               su -s /bin/sh builder -c "abuild -r"
