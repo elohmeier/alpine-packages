@@ -171,6 +171,8 @@ jobs:
           # Convert PKCS8 to PKCS1 format for melange
           openssl rsa -in melange.pem -out melange.rsa -traditional 2>/dev/null || cp melange.pem melange.rsa
           chmod 600 melange.rsa
+          # Derive public key from private key (SPKI format for APK)
+          openssl rsa -in melange.rsa -pubout -out melange.rsa.pub
           rm -f melange.pem
 
       - uses: actions/download-artifact@v4
@@ -181,7 +183,7 @@ jobs:
 
       - name: Prepare site
         run: |
-          mkdir -p _site
+          mkdir -p _site/keys
           for dir in artifacts/packages-*; do
             # Extract arch from packages-{arch}-{package}
             name=${dir#artifacts/packages-}
@@ -189,7 +191,8 @@ jobs:
             mkdir -p "_site/$arch"
             cp -r "$dir"/* "_site/$arch"/
           done
-          cp -r keys _site/
+          # Use the derived public key (matches the signing key)
+          cp melange.rsa.pub _site/keys/packages@elohmeier.rsa.pub
           cp index.html _site/
 
       - name: Generate APK indexes
