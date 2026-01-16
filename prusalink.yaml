@@ -1,7 +1,7 @@
 package:
   name: prusalink
   version: 0.8.1
-  epoch: 9
+  epoch: 10
   description: "Web interface and REST API for Prusa 3D printers with PrusaConnect integration"
   copyright:
     - license: Freeware
@@ -21,6 +21,7 @@ package:
       - usrmerge
   scriptlets:
     pre-install: |
+      #!/bin/sh
       addgroup -S prusalink 2>/dev/null || true
       adduser -S -D -H -h /var/lib/prusalink -s /sbin/nologin -G prusalink \
           -g "PrusaLink daemon" prusalink 2>/dev/null || true
@@ -28,6 +29,7 @@ package:
       addgroup prusalink video 2>/dev/null || true
       addgroup prusalink plugdev 2>/dev/null || true
     post-install: |
+      #!/bin/sh
       chown -R prusalink:prusalink /var/lib/prusalink 2>/dev/null || true
       chown prusalink:prusalink /etc/prusalink 2>/dev/null || true
       if [ ! -f /etc/prusalink/prusalink.ini ] && [ -f /etc/prusalink/prusalink.ini.example ]; then
