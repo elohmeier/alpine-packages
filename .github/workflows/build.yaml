@@ -123,6 +123,14 @@ jobs:
           name: packages-${{ matrix.arch }}-zap-cli
           path: packages/${{ matrix.arch }}
 
+      - name: Generate local repo index
+        run: |
+          melange index \
+            --signing-key melange.rsa \
+            --arch ${{ matrix.arch }} \
+            -o packages/${{ matrix.arch }}/APKINDEX.tar.gz \
+            packages/${{ matrix.arch }}/*.apk
+
       - name: Build matter-server
         run: |
           sudo melange build matter-server.yaml \
