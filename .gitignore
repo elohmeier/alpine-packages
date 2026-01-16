@@ -1,14 +1,9 @@
 # Build artifacts
-*.apk
-src/
-pkg/
-.dist/
-dist/
+packages/*/*.apk
+packages/*/APKINDEX.tar.gz
 
-# abuild
-/packages/*/src/
-/packages/*/pkg/
-/packages/*/.dist/
+# Build cache
+melange-cache/
 
 # Keys (private)
 *.rsa

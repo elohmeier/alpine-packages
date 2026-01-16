@@ -43,6 +43,9 @@ environment:
       - git
       - avahi-dev
       - gtest-dev
+      - ccache
+  environment:
+    CCACHE_DIR: /var/cache/melange/ccache
 
 pipeline:
   - uses: git-checkout
@@ -55,6 +58,8 @@ pipeline:
       cmake -B build -G Ninja \
         -DCMAKE_INSTALL_PREFIX=/usr \
         -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+        -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
         -DCMAKE_CXX_FLAGS="$CXXFLAGS -Wno-maybe-uninitialized" \
         -DBUILD_TESTING=OFF \
         -DOTBR_DBUS=OFF \

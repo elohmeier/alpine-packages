@@ -80,6 +80,8 @@ environment:
       - linux-headers
       - libffi-dev
       - yaml-dev
+  environment:
+    PIP_CACHE_DIR: /var/cache/melange/pip
 
 pipeline:
   # Download and build all wheels using pip (handles SSL natively)

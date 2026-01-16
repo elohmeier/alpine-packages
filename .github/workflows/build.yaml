@@ -1,5 +1,9 @@
 name: Build Packages
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]
@@ -39,14 +43,27 @@ jobs:
           chmod 600 melange.rsa
           rm -f melange.pem
 
+      - name: Setup cache directory
+        run: |
+          mkdir -p cache
+          sudo chmod 777 cache
+
+      - uses: actions/cache@v4
+        with:
+          path: cache
+          key: melange-${{ matrix.package }}-${{ matrix.arch }}-${{ hashFiles(format('{0}.yaml', matrix.package)) }}
+          restore-keys: |
+            melange-${{ matrix.package }}-${{ matrix.arch }}-
+
       - name: Build ${{ matrix.package }}
         run: |
           sudo melange build ${{ matrix.package }}.yaml \
             --arch ${{ matrix.arch }} \
             --signing-key melange.rsa \
             --out-dir packages/ \
+            --cache-dir cache/ \
             --generate-index=false
-          sudo chown -R runner:runner packages/
+          sudo chown -R runner:runner packages/ cache/
 
       - uses: actions/upload-artifact@v4
         with:
@@ -101,6 +118,11 @@ jobs:
         run: |
           for arch_dir in _site/*/; do
             arch=$(basename "$arch_dir")
+            # Skip non-architecture directories
+            case "$arch" in
+              x86_64|aarch64|armhf|armv7|x86) ;;
+              *) continue ;;
+            esac
             echo "Generating APKINDEX for $arch"
             melange index \
               --signing-key melange.rsa \

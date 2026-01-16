@@ -7,7 +7,6 @@ package:
     - license: Apache-2.0
   dependencies:
     runtime:
-      - python3
       - gcompat
       - libuv
       - zlib
@@ -45,6 +44,8 @@ environment:
       - libffi-dev
       - yaml-dev
       - unzip
+  environment:
+    PIP_CACHE_DIR: /var/cache/melange/pip
 
 pipeline:
   # Download and build all wheels using pip (handles SSL natively)
