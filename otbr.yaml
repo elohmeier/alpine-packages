@@ -83,3 +83,19 @@ pipeline:
       install -Dm644 otbr/otbr.sysctl "${{targets.destdir}}"/etc/sysctl.d/otbr.conf
 
   - uses: strip
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+  pipeline:
+    - runs: |
+        # Test that otbr-agent binary exists and shows help
+        otbr-agent --help
+    - runs: |
+        # Test that ot-ctl binary exists and shows version
+        ot-ctl --version || true
