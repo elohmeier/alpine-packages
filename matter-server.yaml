@@ -1,7 +1,7 @@
 package:
   name: matter-server
   version: 8.1.2
-  epoch: 4
+  epoch: 5
   description: "Open Home Foundation Matter Server - WebSocket-based Matter controller"
   copyright:
     - license: Apache-2.0
@@ -231,3 +231,22 @@ pipeline:
 
       # Create data directory
       install -dm755 "${{targets.destdir}}"/var/lib/matter-server
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/edge/main
+        - https://dl-cdn.alpinelinux.org/alpine/edge/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+  pipeline:
+    - runs: |
+        # Test that chip module can be imported
+        python3 -c "from chip.exceptions import ChipStackError; print('chip module OK')"
+    - runs: |
+        # Test that matter_server module can be imported
+        python3 -c "from matter_server.server.__main__ import main; print('matter_server module OK')"
+    - runs: |
+        # Test help output
+        matter-server --help
