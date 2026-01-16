@@ -9,9 +9,51 @@
 
 ## Building
 
-```
+```bash
 melange build --arch arm64 <package>.yaml
 ```
+
+## Local Development
+
+Generate a local signing key (one-time):
+
+```bash
+melange keygen local-melange.rsa
+```
+
+Build a package with local dependencies (e.g., matter-server depends on zap-cli):
+
+```bash
+# Build dependency first
+melange build --arch arm64 --signing-key local-melange.rsa zap-cli.yaml
+
+# Build package with local repo
+melange build --arch arm64 --signing-key local-melange.rsa \
+  --repository-append ./packages --keyring-append local-melange.rsa.pub \
+  matter-server.yaml
+```
+
+Run tests:
+
+```bash
+melange test --arch arm64 \
+  --repository-append ./packages --keyring-append local-melange.rsa.pub \
+  <package>.yaml
+```
+
+## Caching
+
+Melange uses `./melange-cache/` as the default cache directory. Configure package-level caching via environment variables in the yaml:
+
+```yaml
+environment:
+  environment:
+    npm_config_cache: /var/cache/melange/npm
+    PIP_CACHE_DIR: /var/cache/melange/pip
+    CCACHE_DIR: /var/cache/melange/ccache
+```
+
+The `/var/cache/melange/` path inside the container maps to `./melange-cache/` on the host.
 
 ## CI/CD
 

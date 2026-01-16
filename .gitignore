@@ -5,6 +5,6 @@ packages/*/APKINDEX.tar.gz
 # Build cache
 melange-cache/
 
-# Keys (private)
+# Keys
 *.rsa
-!*.rsa.pub
+*.rsa.pub

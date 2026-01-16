@@ -1,0 +1,124 @@
+package:
+  name: zap-cli
+  version: 2025.12.02
+  epoch: 0
+  description: "ZCL Advanced Platform - Code generation tool for Matter/Zigbee"
+  copyright:
+    - license: Apache-2.0
+  dependencies:
+    runtime:
+      - nodejs
+      - sqlite-libs
+  target-architecture:
+    - x86_64
+    - aarch64
+  checks:
+    disabled:
+      - usrmerge
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/edge/main
+      - https://dl-cdn.alpinelinux.org/alpine/edge/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+      - ca-certificates
+      - build-base
+      - git
+      - nodejs
+      - npm
+      - python3
+      - sqlite-dev
+      - linux-headers
+  environment:
+    npm_config_cache: /var/cache/melange/npm
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/project-chip/zap.git
+      tag: v${{package.version}}
+      depth: 1
+
+  # Install npm dependencies and build
+  - runs: |
+      # Install dependencies
+      npm ci --ignore-scripts
+
+      # Rebuild native modules for musl
+      npm rebuild
+
+      # Build the SPA and backend
+      npm run build
+
+  # Install to package directory
+  - runs: |
+      zapdir="${{targets.destdir}}/usr/lib/zap"
+      mkdir -p "$zapdir"
+
+      # Remove Electron and other large unnecessary dependencies for CLI-only usage
+      rm -rf node_modules/electron
+      rm -rf node_modules/@electron
+      rm -rf node_modules/electron-*
+      rm -rf node_modules/7zip-bin
+      rm -rf node_modules/dmg-builder
+      rm -rf node_modules/app-builder-bin
+      rm -rf node_modules/app-builder-lib
+
+      # Remove all prebuilds (glibc-based) - will use pure JS fallbacks or rebuilt modules
+      find node_modules -type d -name "prebuilds" -exec rm -rf {} + 2>/dev/null || true
+
+      # Remove unused native modules with glibc dependencies
+      rm -rf node_modules/lzma-native
+      rm -rf node_modules/bare-fs
+      rm -rf node_modules/bare-os
+      rm -rf node_modules/bare-url
+
+      # Remove glibc rollup binaries - keep only musl version
+      rm -rf node_modules/@rollup/rollup-linux-x64-gnu
+      rm -rf node_modules/@rollup/rollup-linux-arm64-gnu
+      rm -rf node_modules/@rollup/rollup-linux-arm-gnueabihf
+
+      # Keep only musl-compatible sqlite3 binding
+      find node_modules/sqlite3/lib/binding -mindepth 1 -maxdepth 1 -type d ! -name "*musl*" -exec rm -rf {} + 2>/dev/null || true
+
+      # Copy built distribution
+      cp -r dist "$zapdir/"
+      cp -r node_modules "$zapdir/"
+      cp -r zcl-builtin "$zapdir/"
+      cp -r spa "$zapdir/" 2>/dev/null || true
+      cp package.json "$zapdir/"
+      cp apack.json "$zapdir/"
+      cp .version.json "$zapdir/" 2>/dev/null || true
+
+      # Create version file if it doesn't exist
+      if [ ! -f "$zapdir/.version.json" ]; then
+        echo '{"version":"${{package.version}}","hash":"melange","date":"'$(date -Iseconds)'"}' > "$zapdir/.version.json"
+      fi
+
+      # Create wrapper script for zap-cli
+      install -dm755 "${{targets.destdir}}/usr/bin"
+
+      printf '%s\n' '#!/bin/sh' \
+        'export ZAP_INSTALL_PATH="/usr/lib/zap"' \
+        'cd "$ZAP_INSTALL_PATH"' \
+        'exec node dist/src-electron/main-process/main.js "$@"' \
+        > "${{targets.destdir}}/usr/bin/zap-cli"
+      chmod 755 "${{targets.destdir}}/usr/bin/zap-cli"
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/edge/main
+        - https://dl-cdn.alpinelinux.org/alpine/edge/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+  pipeline:
+    - runs: |
+        zap-cli --version
+    - runs: |
+        zap-cli --help

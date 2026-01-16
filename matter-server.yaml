@@ -60,8 +60,8 @@ environment:
       - unzip
       - zstd
       - wget
-      # gcompat needed for zap-cli (Node.js app) during code generation
-      - gcompat
+      - nodejs
+      - zap-cli
   environment:
     PIP_CACHE_DIR: /var/cache/melange/pip
     # Skip CIPD in Pigweed - use system tools instead
@@ -104,25 +104,6 @@ pipeline:
         click coloredlogs jinja2 lark python-path lxml \
         pip-tools virtualenv wheel build mypy mypy-protobuf protobuf \
         cffi cryptography ecdsa
-
-  # Download zap-cli for code generation (glibc binary, needs gcompat)
-  - runs: |
-      # Get zap version from chip-wheels
-      _zap_version=$(cat chip-wheels/connectedhomeip/scripts/setup/zap.version)
-
-      # Determine platform
-      case "${{build.arch}}" in
-        x86_64) _zap_platform="linux-x64" ;;
-        aarch64) _zap_platform="linux-arm64" ;;
-      esac
-
-      # Download and install zap-cli
-      mkdir -p /usr/local/bin
-      wget -q "https://github.com/project-chip/zap/releases/download/${_zap_version}/zap-${_zap_platform}.zip" -O /tmp/zap.zip
-      unzip -q /tmp/zap.zip -d /tmp/zap
-      mv /tmp/zap/zap-cli /usr/local/bin/
-      chmod +x /usr/local/bin/zap-cli
-      rm -rf /tmp/zap /tmp/zap.zip
 
   # Create minimal Pigweed environment (skip CIPD bootstrap)
   - runs: |
