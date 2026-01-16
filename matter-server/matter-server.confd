@@ -15,9 +15,12 @@ MATTER_PORT="5580"
 # Log level: critical, error, warning, info, debug, verbose
 MATTER_LOG_LEVEL="info"
 
+# PAA root certificate directory
+MATTER_PAA_DIR="$MATTER_STORAGE/paa-root-certs"
+
 # Server options
 # See: matter-server --help
-MATTER_SERVER_OPTS="--storage-path $MATTER_STORAGE --port $MATTER_PORT --log-level $MATTER_LOG_LEVEL"
+MATTER_SERVER_OPTS="--storage-path $MATTER_STORAGE --port $MATTER_PORT --log-level $MATTER_LOG_LEVEL --paa-root-cert-dir $MATTER_PAA_DIR"
 
 # Uncomment to bind to specific interface
 # MATTER_SERVER_OPTS="$MATTER_SERVER_OPTS --primary-interface $MATTER_INTERFACE"

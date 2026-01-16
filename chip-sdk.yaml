@@ -1,7 +1,7 @@
 package:
   name: chip-sdk
   version: 2025.7.0
-  epoch: 0
+  epoch: 1
   description: "Matter/CHIP SDK Python bindings for Home Assistant"
   copyright:
     - license: Apache-2.0
@@ -93,6 +93,10 @@ pipeline:
         patch -p1 < "$patch"
       done
 
+      # Override storage paths from /data to /var/lib/chip (Alpine FHS)
+      # The chip-wheels patch sets /data but we want a more standard location
+      sed -i 's|\\"/data\\"|\\"/var/lib/chip\\"|g' src/platform/Linux/BUILD.gn
+
   # Set up Python build environment
   - runs: |
       cd chip-wheels/connectedhomeip
@@ -177,6 +181,10 @@ pipeline:
       done
       # Clean up dist-info metadata we don't need
       rm -rf "$sitepkgs"/*.dist-info/direct_url.json 2>/dev/null || true
+
+      # Create storage directory for CHIP SDK configuration
+      # Paths are compiled in: /var/lib/chip/{chip_factory.ini,chip_config.ini,chip_counters.ini,chip_kvs}
+      install -dm755 "${{targets.destdir}}"/var/lib/chip
 
 test:
   environment:
