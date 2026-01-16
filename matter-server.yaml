@@ -1,7 +1,7 @@
 package:
   name: matter-server
   version: 8.1.2
-  epoch: 8
+  epoch: 9
   description: "Open Home Foundation Matter Server - WebSocket-based Matter controller"
   copyright:
     - license: Apache-2.0

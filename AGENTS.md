@@ -41,6 +41,30 @@ melange test --arch arm64 \
   <package>.yaml
 ```
 
+Build and test workflow:
+
+```bash
+# 1. Build the package
+melange build --arch arm64 --signing-key local-melange.rsa \
+  --repository-append ./packages --keyring-append local-melange.rsa.pub \
+  <package>.yaml
+
+# 2. Run tests against the built package
+melange test --arch arm64 \
+  --repository-append ./packages --keyring-append local-melange.rsa.pub \
+  <package>.yaml
+```
+
+Inspect package contents:
+
+```bash
+# List files in package
+tar -tzf packages/aarch64/<package>-<version>.apk
+
+# Extract and check specific file
+tar -xzf packages/aarch64/<package>-<version>.apk -O <path/to/file>
+```
+
 ## Caching
 
 Melange uses `./melange-cache/` as the default cache directory. Configure package-level caching via environment variables in the yaml:

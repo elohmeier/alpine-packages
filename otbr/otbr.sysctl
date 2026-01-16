@@ -1,0 +1,10 @@
+# OpenThread Border Router sysctl settings
+#
+# These settings are required for Thread border routing to function properly.
+# Install to /etc/sysctl.d/otbr.conf
+
+# IPv6 forwarding - required for routing between Thread and backbone networks
+net.ipv6.conf.all.forwarding = 1
+
+# IPv4 forwarding - required for NAT64 (Thread devices accessing IPv4 internet)
+net.ipv4.ip_forward = 1
