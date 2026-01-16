@@ -22,7 +22,7 @@ jobs:
       fail-fast: true
       matrix:
         arch: [x86_64, aarch64, armhf]
-        package: [prusalink, otbr, matter-server]
+        package: [prusalink, otbr, zap-cli]
         include:
           - arch: x86_64
             runner: ubuntu-latest
@@ -34,7 +34,7 @@ jobs:
           - arch: armhf
             package: otbr
           - arch: armhf
-            package: matter-server
+            package: zap-cli
     steps:
       - uses: actions/checkout@v4
 
@@ -78,8 +78,71 @@ jobs:
           path: packages/${{ matrix.arch }}
           if-no-files-found: ignore
 
-  publish:
+  build-matter-server:
     needs: build
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        arch: [x86_64, aarch64]
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: chainguard-dev/actions/setup-melange@main
+        with:
+          version: latest-release
+
+      - name: Setup signing key
+        run: |
+          echo "${{ secrets.ABUILD_PRIVKEY }}" > melange.pem
+          openssl rsa -in melange.pem -out melange.rsa -traditional 2>/dev/null || cp melange.pem melange.rsa
+          openssl rsa -in melange.rsa -pubout -out melange.rsa.pub
+          chmod 600 melange.rsa
+          rm -f melange.pem
+
+      - name: Setup cache directory
+        run: |
+          mkdir -p cache
+          sudo chmod 777 cache
+
+      - uses: actions/cache@v4
+        with:
+          path: cache
+          key: melange-matter-server-${{ matrix.arch }}-${{ hashFiles('matter-server.yaml') }}
+          restore-keys: |
+            melange-matter-server-${{ matrix.arch }}-
+
+      - name: Download zap-cli artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}-zap-cli
+          path: packages/${{ matrix.arch }}
+
+      - name: Build matter-server
+        run: |
+          sudo melange build matter-server.yaml \
+            --arch ${{ matrix.arch }} \
+            --signing-key melange.rsa \
+            --keyring-append melange.rsa.pub \
+            --repository-append packages/ \
+            --out-dir packages/ \
+            --cache-dir cache/ \
+            --generate-index=false
+          sudo chown -R runner:runner packages/ cache/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}-matter-server
+          path: packages/${{ matrix.arch }}
+          if-no-files-found: ignore
+
+  publish:
+    needs: [build, build-matter-server]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
