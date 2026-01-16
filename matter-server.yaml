@@ -62,8 +62,10 @@ environment:
       - wget
       - nodejs
       - zap-cli
+      - ccache
   environment:
     PIP_CACHE_DIR: /var/cache/melange/pip
+    CCACHE_DIR: /var/cache/melange/ccache
     # Skip CIPD in Pigweed - use system tools instead
     PW_ENVSETUP_NO_CIPD: "1"
 
@@ -139,10 +141,11 @@ pipeline:
 
       # Generate build files with GN
       # Use custom toolchain with native compilers (no cross-compile prefix)
+      # Use ccache to speed up rebuilds
       gn gen out/python --args="
         custom_toolchain=\"//build/toolchain/custom\"
-        target_cc=\"gcc\"
-        target_cxx=\"g++\"
+        target_cc=\"ccache gcc\"
+        target_cxx=\"ccache g++\"
         target_ar=\"ar\"
         chip_crypto=\"boringssl\"
         enable_rtti=true
@@ -158,6 +161,9 @@ pipeline:
 
       # Build Python wheels
       ninja -C out/python python_wheels
+
+      # Show ccache stats for debugging
+      ccache -s
 
   # Install all components
   - runs: |
