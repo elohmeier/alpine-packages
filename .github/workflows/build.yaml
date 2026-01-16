@@ -19,7 +19,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         arch: [x86_64, aarch64, armhf]
         package: [prusalink, otbr, matter-server]
