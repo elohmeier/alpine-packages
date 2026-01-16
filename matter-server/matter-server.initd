@@ -23,6 +23,10 @@ start_pre() {
 	# Ensure PAA root cert directory exists
 	checkpath --directory --owner "$command_user" /var/lib/matter-server/paa-root-certs
 
+	# Ensure CHIP SDK storage directory has correct ownership
+	# (created by chip-sdk package but needs to be writable by matter user)
+	checkpath --directory --owner "$command_user" /var/lib/chip
+
 	# Ensure log file exists with correct ownership
 	checkpath --file --owner "$command_user" /var/log/${RC_SVCNAME}.log
 
