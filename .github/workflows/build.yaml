@@ -17,12 +17,19 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: true
       matrix:
         arch: [x86_64, aarch64, armhf]
         package: [prusalink, otbr, matter-server]
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+          - arch: armhf
+            runner: ubuntu-24.04-arm
         exclude:
           - arch: armhf
             package: otbr
