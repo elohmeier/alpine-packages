@@ -1,7 +1,7 @@
 package:
   name: otbr
   version: 0.3.0
-  epoch: 2
+  epoch: 3
   description: "OpenThread Border Router"
   copyright:
     - license: BSD-3-Clause
@@ -66,7 +66,7 @@ pipeline:
         -DBUILD_TESTING=OFF \
         -DOTBR_DBUS=OFF \
         -DOTBR_MDNS=avahi \
-        -DOTBR_REST=OFF \
+        -DOTBR_REST=ON \
         -DOTBR_WEB=OFF \
         -DOTBR_NAT64=ON \
         -DOTBR_BORDER_ROUTING=ON

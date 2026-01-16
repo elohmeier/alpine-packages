@@ -12,5 +12,9 @@ OTBR_THREAD_IF="wpan0"
 # Infrastructure/backbone interface (Wi-Fi or Ethernet)
 OTBR_INFRA_IF="eth0"
 
+# REST API settings (used by Home Assistant Thread integration)
+OTBR_REST_ADDR="::"
+OTBR_REST_PORT="8081"
+
 # Agent options: -I <thread_if> -B <backbone_if> <radio_url>
-OTBR_AGENT_OPTS="-I $OTBR_THREAD_IF -B $OTBR_INFRA_IF spinel+hdlc+uart://$OTBR_RADIO_DEVICE"
+OTBR_AGENT_OPTS="-I $OTBR_THREAD_IF -B $OTBR_INFRA_IF --rest-listen-address $OTBR_REST_ADDR --rest-listen-port $OTBR_REST_PORT spinel+hdlc+uart://$OTBR_RADIO_DEVICE"
