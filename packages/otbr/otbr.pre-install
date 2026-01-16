@@ -1,6 +1,0 @@
-#!/bin/sh
-
-addgroup -S otbr 2>/dev/null || true
-adduser -S -D -H -h /var/lib/otbr -s /sbin/nologin -G otbr \
-	-g "OpenThread Border Router" otbr 2>/dev/null || true
-adduser otbr dialout 2>/dev/null || true

@@ -1,0 +1,182 @@
+package:
+  name: prusalink
+  version: 0.8.1
+  epoch: 9
+  description: "Web interface and REST API for Prusa 3D printers with PrusaConnect integration"
+  copyright:
+    - license: Freeware
+  dependencies:
+    runtime:
+      - python3
+      - py3-numpy
+      - libjpeg-turbo
+      - libturbojpeg
+      - libcap2
+      - libmagic
+      - eudev
+      - eudev-libs
+      - yaml
+  checks:
+    disabled:
+      - usrmerge
+  scriptlets:
+    pre-install: |
+      addgroup -S prusalink 2>/dev/null || true
+      adduser -S -D -H -h /var/lib/prusalink -s /sbin/nologin -G prusalink \
+          -g "PrusaLink daemon" prusalink 2>/dev/null || true
+      addgroup prusalink dialout 2>/dev/null || true
+      addgroup prusalink video 2>/dev/null || true
+      addgroup prusalink plugdev 2>/dev/null || true
+    post-install: |
+      chown -R prusalink:prusalink /var/lib/prusalink 2>/dev/null || true
+      chown prusalink:prusalink /etc/prusalink 2>/dev/null || true
+      if [ ! -f /etc/prusalink/prusalink.ini ] && [ -f /etc/prusalink/prusalink.ini.example ]; then
+          cp /etc/prusalink/prusalink.ini.example /etc/prusalink/prusalink.ini
+          chown prusalink:prusalink /etc/prusalink/prusalink.ini
+          echo ""
+          echo "==> PrusaLink installed successfully!"
+          echo ""
+          echo "Configuration: /etc/prusalink/prusalink.ini"
+          echo "Data directory: /var/lib/prusalink"
+          echo "Logs: /var/log/prusalink.log"
+          echo "Errors: /var/log/prusalink.err"
+          echo ""
+          echo "To start the service:"
+          echo "  /etc/init.d/prusalink start"
+          echo ""
+          echo "To start on boot:"
+          echo "  rc-update add prusalink default"
+          echo ""
+          echo "==> For Pi Zero GPIO connection to MK3S+ (Einsy board pins):"
+          echo ""
+          echo "Add to /boot/usercfg.txt:"
+          echo "  [all]"
+          echo "  enable_uart=1"
+          echo "  dtoverlay=disable-bt"
+          echo ""
+          echo "This enables the full UART and disables Bluetooth to free it."
+          echo "Reboot after making these changes."
+          echo ""
+      fi
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+      - ca-certificates
+      - build-base
+      - py3-pip
+      - py3-setuptools
+      - py3-wheel
+      - py3-numpy
+      - python3-dev
+      - libjpeg-turbo-dev
+      - libcap-dev
+      - linux-headers
+      - libffi-dev
+      - yaml-dev
+
+pipeline:
+  # Download and build all wheels using pip (handles SSL natively)
+  - runs: |
+      # Pin pydantic to 1.x as prusalink is not compatible with 2.x
+      _pydantic_version="1.10.12"
+
+      mkdir -p .dist
+
+      # Download prusalink and create wheel
+      python3 -m pip wheel \
+        --no-deps \
+        --wheel-dir .dist \
+        "prusalink==${{package.version}}"
+
+      # Download and build all dependencies into wheels
+      # Note: numpy is excluded - use system py3-numpy package instead (much faster on ARM)
+      # Use --no-binary for packages that incorrectly download armv7 wheels on armv6
+      python3 -m pip wheel \
+        --wheel-dir .dist \
+        --no-binary charset_normalizer,zeroconf \
+        "pydantic==$_pydantic_version" \
+        "prusa.connect.sdk.printer>=0.8.1" \
+        "py-gcode-metadata" \
+        "bidict~=0.22.1" \
+        "extendparser~=0.3.1" \
+        "jinja2-template-info~=0.2.4" \
+        "lockfile~=0.12.2" \
+        "packaging~=23.0" \
+        "PoorWSGI~=2.5.0" \
+        "pyric~=0.1.6.3" \
+        "python-daemon~=3.0.1" \
+        "python-prctl~=1.8.1" \
+        "pyudev~=0.24.0" \
+        "PyYAML~=6.0" \
+        "requests>=2.31.0" \
+        "sortedcontainers~=2.4.0" \
+        "unidecode~=1.3.6" \
+        "validators~=0.20.0" \
+        "zeroconf~=0.47.4" \
+        "blinker~=1.5" \
+        "python-magic~=0.4.27" \
+        "Jinja2>=3.0"
+
+      # Build PyTurboJPEG separately without its numpy dependency
+      # (numpy is provided by system py3-numpy)
+      python3 -m pip wheel --no-deps --wheel-dir .dist "PyTurboJPEG~=1.7.0"
+
+  - runs: |
+      pyver=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+      sitepkgs="${{targets.destdir}}/usr/lib/python$pyver/site-packages"
+
+      # Remove duplicate wheels (keep platform-specific over pure-python)
+      # charset_normalizer has both musllinux and py3-none-any versions
+      muslwhl=$(ls .dist/charset_normalizer*musllinux*.whl 2>/dev/null | head -1)
+      if [ -n "$muslwhl" ]; then
+        rm -f .dist/charset_normalizer*-py3-none-any.whl 2>/dev/null || true
+      fi
+
+      # Install all wheels (dependencies + prusalink)
+      python3 -m pip install \
+        --no-deps \
+        --no-compile \
+        --target "$sitepkgs" \
+        .dist/*.whl
+
+      # Byte-compile Python files
+      python3 -m compileall -q "$sitepkgs" || true
+
+      # Create bin directory and install entry points
+      install -dm755 "${{targets.destdir}}"/usr/bin
+
+      # Create prusalink entry point
+      printf '%s\n' '#!/usr/bin/python3' 'import sys' 'from prusa.link.__main__ import main' 'sys.exit(main())' > "${{targets.destdir}}"/usr/bin/prusalink
+      chmod 755 "${{targets.destdir}}"/usr/bin/prusalink
+
+      # Create prusalink-manager entry point
+      printf '%s\n' '#!/usr/bin/python3' 'import sys' 'from prusa.link.multi_instance.__main__ import main' 'sys.exit(main())' > "${{targets.destdir}}"/usr/bin/prusalink-manager
+      chmod 755 "${{targets.destdir}}"/usr/bin/prusalink-manager
+
+      # Install prusalink-boot script from package data
+      if [ -f "$sitepkgs/prusa/link/data/prusalink-boot" ]; then
+        install -Dm755 "$sitepkgs/prusa/link/data/prusalink-boot" \
+          "${{targets.destdir}}"/usr/bin/prusalink-boot
+      fi
+
+      # Install OpenRC init script (from package source dir)
+      install -Dm755 prusalink/prusalink.initd "${{targets.destdir}}"/etc/init.d/prusalink
+      install -Dm644 prusalink/prusalink.confd "${{targets.destdir}}"/etc/conf.d/prusalink
+
+      # Create configuration directory and install Alpine-specific config
+      install -dm755 "${{targets.destdir}}"/etc/prusalink
+      install -Dm644 prusalink/prusalink.ini "${{targets.destdir}}"/etc/prusalink/prusalink.ini.example
+
+      # Create data directories
+      install -dm755 "${{targets.destdir}}"/var/lib/prusalink
+      install -dm755 "${{targets.destdir}}"/var/lib/prusalink/gcodes
+
+      # Install udev rules for serial port access
+      install -Dm644 prusalink/99-prusalink.rules "${{targets.destdir}}"/etc/udev/rules.d/99-prusalink.rules

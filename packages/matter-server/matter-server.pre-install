@@ -1,6 +1,0 @@
-#!/bin/sh
-addgroup -S matter 2>/dev/null || true
-adduser -S -D -H -h /var/lib/matter-server -s /sbin/nologin -G matter \
-	-g "Matter Server" matter 2>/dev/null || true
-# Add to bluetooth group for BLE commissioning (if group exists)
-adduser matter bluetooth 2>/dev/null || true

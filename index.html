@@ -13,8 +13,8 @@ wget -qO /etc/apk/keys/packages@elohmeier.rsa.pub \
 # Add repository
 echo "https://elohmeier.github.io/alpine-packages" >> /etc/apk/repositories
 
-# Install
-apk update && apk add prusalink
+apk update
+apk search -r . # list available packages
 </pre>
 <p><a href="https://github.com/elohmeier/alpine-packages">Source</a></p>
 </body>

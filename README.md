@@ -1,10 +1,6 @@
 # Alpine Packages
 
-Custom Alpine Linux APK repository for armhf (armv6).
-
-## Packages
-
-- **prusalink** - Web interface and REST API for Prusa 3D printers
+Custom Alpine Linux APK repository built with [melange](https://github.com/chainguard-dev/melange).
 
 ## Usage
 
@@ -13,30 +9,19 @@ Add this repository to your Alpine system:
 ```sh
 # Add the signing key
 wget -qO /etc/apk/keys/packages@elohmeier.rsa.pub \
-  https://raw.githubusercontent.com/elohmeier/alpine-packages/main/keys/packages@elohmeier.rsa.pub
+  https://elohmeier.github.io/alpine-packages/keys/packages@elohmeier.rsa.pub
 
 # Add the repository (APK appends the architecture automatically)
 echo "https://elohmeier.github.io/alpine-packages" >> /etc/apk/repositories
 
-# Update and install prusalink
 apk update
-apk add prusalink
 ```
 
-## Building Packages Locally
-
-### Generate Signing Keys
+## Building Locally
 
 ```sh
-# Generate a new keypair (do this once)
-abuild-keygen -a -i -n
-```
-
-### Build a Package
-
-```sh
-cd packages/prusalink
-abuild -r
+melange keygen
+melange build <package>.yaml --signing-key melange.rsa
 ```
 
 ## CI Setup

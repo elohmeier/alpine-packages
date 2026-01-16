@@ -1,0 +1,76 @@
+package:
+  name: otbr
+  version: 0.3.0
+  epoch: 0
+  description: "OpenThread Border Router"
+  copyright:
+    - license: BSD-3-Clause
+  dependencies:
+    runtime:
+      - iptables
+      - ipset
+      - jsoncpp
+      - eudev
+      - avahi
+  target-architecture:
+    - aarch64
+    - x86_64
+  checks:
+    disabled:
+      - usrmerge
+  scriptlets:
+    pre-install: |
+      addgroup -S otbr 2>/dev/null || true
+      adduser -S -D -H -h /var/lib/otbr -s /sbin/nologin -G otbr \
+        -g "OpenThread Border Router" otbr 2>/dev/null || true
+      adduser otbr dialout 2>/dev/null || true
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+      - ca-certificates
+      - build-base
+      - cmake
+      - ninja
+      - jsoncpp-dev
+      - linux-headers
+      - git
+      - avahi-dev
+      - gtest-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/openthread/ot-br-posix.git
+      tag: thread-reference-20250612
+      recurse-submodules: true
+
+  - runs: |
+      cmake -B build -G Ninja \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_CXX_FLAGS="$CXXFLAGS -Wno-maybe-uninitialized" \
+        -DBUILD_TESTING=OFF \
+        -DOTBR_DBUS=OFF \
+        -DOTBR_MDNS=avahi \
+        -DOTBR_REST=OFF \
+        -DOTBR_WEB=OFF \
+        -DOTBR_NAT64=ON \
+        -DOTBR_BORDER_ROUTING=ON
+      cmake --build build
+
+  - runs: |
+      DESTDIR="${{targets.destdir}}" cmake --install build
+
+  - runs: |
+      install -Dm755 otbr/otbr-agent.initd "${{targets.destdir}}"/etc/init.d/otbr-agent
+      install -Dm644 otbr/otbr-agent.confd "${{targets.destdir}}"/etc/conf.d/otbr-agent
+      install -Dm644 otbr/99-otbr.rules "${{targets.destdir}}"/etc/udev/rules.d/99-otbr.rules
+
+  - uses: strip

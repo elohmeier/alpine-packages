@@ -1,0 +1,133 @@
+package:
+  name: matter-server
+  version: 8.1.2
+  epoch: 0
+  description: "Open Home Foundation Matter Server - WebSocket-based Matter controller"
+  copyright:
+    - license: Apache-2.0
+  dependencies:
+    runtime:
+      - python3
+      - gcompat
+      - libuv
+      - zlib
+      - json-c
+      - libnl3
+  target-architecture:
+    - x86_64
+    - aarch64
+  checks:
+    disabled:
+      - usrmerge
+  scriptlets:
+    pre-install: |
+      addgroup -S matter 2>/dev/null || true
+      adduser -S -D -H -h /var/lib/matter-server -s /sbin/nologin -G matter \
+        -g "Matter Server" matter 2>/dev/null || true
+      # Add to bluetooth group for BLE commissioning (if group exists)
+      adduser matter bluetooth 2>/dev/null || true
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+      - ca-certificates
+      - build-base
+      - py3-pip
+      - py3-setuptools
+      - py3-wheel
+      - python3-dev
+      - libffi-dev
+      - yaml-dev
+      - unzip
+
+pipeline:
+  # Download and build all wheels using pip (handles SSL natively)
+  - runs: |
+      # CHIP SDK version matching the python-matter-server release
+      _chip_version="2025.7.0"
+
+      mkdir -p .dist
+
+      # Download matter-server wheel
+      python3 -m pip wheel \
+        --wheel-dir .dist \
+        "python-matter-server==${{package.version}}"
+
+      # Determine platform for CHIP wheels based on build architecture
+      case "${{build.arch}}" in
+        x86_64) _plat="manylinux_2_31_x86_64" ;;
+        aarch64) _plat="manylinux_2_31_aarch64" ;;
+      esac
+
+      # Download CHIP wheels (glibc-based, will use gcompat)
+      # Must use pip download with explicit platform since Alpine is musl
+      python3 -m pip download \
+        --dest .dist \
+        --only-binary :all: \
+        --no-deps \
+        --platform "$_plat" \
+        --python-version 312 \
+        --implementation cp \
+        --abi cp312 \
+        "home-assistant-chip-core==$_chip_version" \
+        "home-assistant-chip-clusters==$_chip_version"
+
+      # Download/build all other dependencies
+      python3 -m pip wheel \
+        --wheel-dir .dist \
+        "aiohttp>=3.9.0" \
+        "aiorun>=2024.5.1" \
+        "coloredlogs>=15.0" \
+        "orjson>=3.9.0" \
+        "cryptography>=42.0.0" \
+        "zeroconf>=0.131.0" \
+        "atomicwrites>=1.4.0" \
+        "pyyaml>=6.0" \
+        "construct>=2.10" \
+        "dacite>=1.8" \
+        "rich>=13.0"
+
+  - runs: |
+      pyver=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+      sitepkgs="${{targets.destdir}}/usr/lib/python$pyver/site-packages"
+      mkdir -p "$sitepkgs"
+
+      # Install CHIP wheels manually (bypassing pip platform check)
+      # These are glibc wheels that will work with gcompat
+      for whl in .dist/home_assistant_chip*.whl; do
+        unzip -o -q "$whl" -d "$sitepkgs"
+      done
+
+      # Install other wheels normally
+      for whl in .dist/*.whl; do
+        case "$whl" in
+          *home_assistant_chip*) continue ;;  # Already installed
+        esac
+        python3 -m pip install \
+          --no-deps \
+          --no-compile \
+          --target "$sitepkgs" \
+          "$whl"
+      done
+
+      # Byte-compile Python files
+      python3 -m compileall -q "$sitepkgs" || true
+
+      # Create bin directory and install entry point
+      install -dm755 "${{targets.destdir}}"/usr/bin
+
+      printf '%s\n' '#!/usr/bin/python3' 'import sys' 'from matter_server.server.__main__ import main' 'sys.exit(main())' > "${{targets.destdir}}"/usr/bin/matter-server
+      chmod 755 "${{targets.destdir}}"/usr/bin/matter-server
+
+      # Install OpenRC init script (from package source dir)
+      install -Dm755 matter-server/matter-server.initd "${{targets.destdir}}"/etc/init.d/matter-server
+      install -Dm644 matter-server/matter-server.confd "${{targets.destdir}}"/etc/conf.d/matter-server
+
+      # Create data directory
+      install -dm755 "${{targets.destdir}}"/var/lib/matter-server
