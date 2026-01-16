@@ -46,8 +46,8 @@ jobs:
         run: |
           echo "${{ secrets.ABUILD_PRIVKEY }}" > melange.pem
           # Convert PKCS8 to PKCS1 format for melange
-          openssl rsa -in melange.pem -out melange.rsa -traditional 2>/dev/null || cp melange.pem melange.rsa
-          chmod 600 melange.rsa
+          openssl rsa -in melange.pem -out packages@elohmeier.rsa -traditional 2>/dev/null || cp melange.pem packages@elohmeier.rsa
+          chmod 600 packages@elohmeier.rsa
           rm -f melange.pem
 
       - name: Setup cache directory
@@ -66,7 +66,7 @@ jobs:
         run: |
           sudo melange build ${{ matrix.package }}.yaml \
             --arch ${{ matrix.arch }} \
-            --signing-key melange.rsa \
+            --signing-key packages@elohmeier.rsa \
             --out-dir packages/ \
             --cache-dir cache/ \
             --generate-index=false
@@ -100,9 +100,9 @@ jobs:
       - name: Setup signing key
         run: |
           echo "${{ secrets.ABUILD_PRIVKEY }}" > melange.pem
-          openssl rsa -in melange.pem -out melange.rsa -traditional 2>/dev/null || cp melange.pem melange.rsa
-          openssl rsa -in melange.rsa -pubout -out melange.rsa.pub
-          chmod 600 melange.rsa
+          openssl rsa -in melange.pem -out packages@elohmeier.rsa -traditional 2>/dev/null || cp melange.pem packages@elohmeier.rsa
+          openssl rsa -in packages@elohmeier.rsa -pubout -out packages@elohmeier.rsa.pub
+          chmod 600 packages@elohmeier.rsa
           rm -f melange.pem
 
       - name: Setup cache directory
@@ -126,7 +126,7 @@ jobs:
       - name: Generate local repo index
         run: |
           melange index \
-            --signing-key melange.rsa \
+            --signing-key packages@elohmeier.rsa \
             --arch ${{ matrix.arch }} \
             -o packages/${{ matrix.arch }}/APKINDEX.tar.gz \
             packages/${{ matrix.arch }}/*.apk
@@ -135,8 +135,8 @@ jobs:
         run: |
           sudo melange build matter-server.yaml \
             --arch ${{ matrix.arch }} \
-            --signing-key melange.rsa \
-            --keyring-append melange.rsa.pub \
+            --signing-key packages@elohmeier.rsa \
+            --keyring-append packages@elohmeier.rsa.pub \
             --repository-append packages/ \
             --out-dir packages/ \
             --cache-dir cache/ \
@@ -169,10 +169,10 @@ jobs:
         run: |
           echo "${{ secrets.ABUILD_PRIVKEY }}" > melange.pem
           # Convert PKCS8 to PKCS1 format for melange
-          openssl rsa -in melange.pem -out melange.rsa -traditional 2>/dev/null || cp melange.pem melange.rsa
-          chmod 600 melange.rsa
+          openssl rsa -in melange.pem -out packages@elohmeier.rsa -traditional 2>/dev/null || cp melange.pem packages@elohmeier.rsa
+          chmod 600 packages@elohmeier.rsa
           # Derive public key from private key (SPKI format for APK)
-          openssl rsa -in melange.rsa -pubout -out melange.rsa.pub
+          openssl rsa -in packages@elohmeier.rsa -pubout -out packages@elohmeier.rsa.pub
           rm -f melange.pem
 
       - uses: actions/download-artifact@v4
@@ -192,7 +192,7 @@ jobs:
             cp -r "$dir"/* "_site/$arch"/
           done
           # Use the derived public key (matches the signing key)
-          cp melange.rsa.pub _site/keys/packages@elohmeier.rsa.pub
+          cp packages@elohmeier.rsa.pub _site/keys/packages@elohmeier.rsa.pub
           cp index.html _site/
 
       - name: Generate APK indexes
@@ -206,7 +206,7 @@ jobs:
             esac
             echo "Generating APKINDEX for $arch"
             melange index \
-              --signing-key melange.rsa \
+              --signing-key packages@elohmeier.rsa \
               --arch "$arch" \
               -o "$arch_dir/APKINDEX.tar.gz" \
               "$arch_dir"/*.apk
