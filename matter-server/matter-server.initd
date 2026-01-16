@@ -20,6 +20,9 @@ start_pre() {
 	# Ensure data directory exists with correct ownership
 	checkpath --directory --owner "$command_user" /var/lib/matter-server
 
+	# Ensure log file exists with correct ownership
+	checkpath --file --owner "$command_user" /var/log/${RC_SVCNAME}.log
+
 	# Check IPv6 is enabled (required for Matter)
 	if [ ! -d /proc/sys/net/ipv6 ]; then
 		eerror "IPv6 is required for Matter but appears to be disabled"
