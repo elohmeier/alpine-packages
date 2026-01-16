@@ -1,0 +1,74 @@
+From 981854e9066977399a04e316fb63cfa4331261c8 Mon Sep 17 00:00:00 2001
+From: Stefan Agner <stefan@agner.ch>
+Date: Tue, 22 Nov 2022 10:51:17 +0100
+Subject: [PATCH] Support custom platform tag
+
+---
+ build/chip/python_wheel.gni    | 13 +++++++++++++
+ src/controller/python/BUILD.gn | 15 +--------------
+ 2 files changed, 14 insertions(+), 14 deletions(-)
+
+diff --git a/build/chip/python_wheel.gni b/build/chip/python_wheel.gni
+index a41aff0a95..4a70c99a54 100644
+--- a/build/chip/python_wheel.gni
++++ b/build/chip/python_wheel.gni
+@@ -18,10 +18,23 @@ import("//build_overrides/pigweed.gni")
+ import("$dir_pw_build/python.gni")
+ import("${chip_root}/src/system/system.gni")
+ 
++if (current_os == "mac") {
++  import("${chip_root}/build/config/mac/mac_sdk.gni")
++}
++
+ declare_args() {
+   chip_python_version = "1.0.0"
+   chip_python_package_prefix = "matter"
+   chip_python_supports_stack_locking = chip_system_config_locking != "none"
++
++  if (current_os == "mac") {
++    chip_python_platform_tag = string_replace(
++            string_replace(mac_deployment_target, "macos", "macosx."),
++            ".",
++            "_")
++  } else {
++    chip_python_platform_tag = current_os
++  }
+ }
+ 
+ template("matter_python_wheel_action") {
+diff --git a/src/controller/python/BUILD.gn b/src/controller/python/BUILD.gn
+index 76de663119..cdc70db7fb 100644
+--- a/src/controller/python/BUILD.gn
++++ b/src/controller/python/BUILD.gn
+@@ -27,10 +27,6 @@ import("${chip_root}/src/platform/python.gni")
+ import("${chip_root}/src/system/system.gni")
+ import("${dir_pw_unit_test}/test.gni")
+ 
+-if (current_os == "mac") {
+-  import("${build_root}/config/mac/mac_sdk.gni")
+-}
+-
+ config("controller_wno_deprecate") {
+   cflags = [ "-Wno-deprecated-declarations" ]
+ }
+@@ -357,16 +353,7 @@ matter_python_wheel_action("matter-core") {
+     cpu_tag = current_cpu
+   }
+ 
+-  if (current_os == "mac") {
+-    py_platform_tag = string_replace(
+-            string_replace(mac_deployment_target, "macos", "macosx."),
+-            ".",
+-            "_")
+-  } else {
+-    py_platform_tag = current_os
+-  }
+-
+-  py_platform_tag = py_platform_tag + "_" + cpu_tag
++  py_platform_tag = chip_python_platform_tag  + "_" + cpu_tag
+ 
+   if (chip_support_commissioning_in_controller) {
+     lib_name = "_ChipDeviceCtrl.so"
+-- 
+2.51.2
+

@@ -1,0 +1,105 @@
+From b9a61cfe5a253423ff2057119ea070728d2223ca Mon Sep 17 00:00:00 2001
+From: Stefan Agner <stefan@agner.ch>
+Date: Thu, 23 May 2024 12:48:54 +0200
+Subject: [PATCH] Add raw attribute callback
+
+Add new subscription callback which uses raw AttributePath as paths
+of changed attributes. This allows to subscribe to custom clusters,
+where no Cluster/Attribute types are part of the Python library.
+
+Also allow to get the raw Python values (in tagged dict format)
+directly from the subscription transaction.
+---
+ .../python/matter/clusters/Attribute.py       | 48 +++++++++++++++----
+ 1 file changed, 38 insertions(+), 10 deletions(-)
+
+diff --git a/src/controller/python/matter/clusters/Attribute.py b/src/controller/python/matter/clusters/Attribute.py
+index d8c6b1ca5a..d595e893c3 100644
+--- a/src/controller/python/matter/clusters/Attribute.py
++++ b/src/controller/python/matter/clusters/Attribute.py
+@@ -436,6 +436,7 @@ class SubscriptionTransaction:
+                                                      int, int], None] = DefaultResubscriptionAttemptedCallback
+         self._onAttributeChangeCb: Callable[[
+             TypedAttributePath, SubscriptionTransaction], None] = DefaultAttributeChangeCallback
++        self._onRawAttributeChangeCb: Optional[Callable[[AttributePath, SubscriptionTransaction]]] = None
+         self._onEventChangeCb: Callable[[
+             EventReadResult, SubscriptionTransaction], None] = DefaultEventChangeCallback
+         self._onErrorCb: Callable[[
+@@ -467,6 +468,18 @@ class SubscriptionTransaction:
+         else:
+             return data[path.Path.EndpointId][path.ClusterType][path.AttributeType]
+ 
++    def GetTLVAttributes(self) -> Dict[int, Dict[int, Dict[int, Any]]]:
++        '''Returns the attributes value cache in raw/tag dict value tracking
++        the latest state on the publisher.
++        '''
++        return self._readTransaction._cache.attributeTLVCache
++
++
++    def GetTLVAttribute(self, path: AttributePath) -> bytes:
++        '''Returns a specific attribute given a AttributePath.
++        '''
++        return self._readTransaction._cache.attributeTLVCache[path.EndpointId][path.ClusterId][path.AttributeId]
++
+     def GetEvents(self):
+         return self._readTransaction.GetAllEventValues()
+ 
+@@ -549,8 +562,14 @@ class SubscriptionTransaction:
+         Sets the callback function for the attribute value change event,
+         accepts a Callable that accepts an attribute path and the cached data.
+         '''
+-        if callback is not None:
+-            self._onAttributeChangeCb = callback
++        self._onAttributeChangeCb = callback
++
++    def SetRawAttributeUpdateCallback(self, callback: Callable[[AttributePath, SubscriptionTransaction], None]):
++        '''
++        Sets the callback function for raw attribute value change event,
++        accepts a Callable which accepts an attribute path and the cached data.
++        '''
++        self._onRawAttributeChangeCb = callback
+ 
+     def SetReportBeginCallback(self, callback: Callable[[SubscriptionTransaction], None]):
+         '''
+@@ -596,6 +615,10 @@ class SubscriptionTransaction:
+     def OnReportEndCb(self) -> Callable[[SubscriptionTransaction], None]:
+         return self._onReportEndCb
+ 
++    @property
++    def OnRawAttributeChangeCb(self) -> Callable[[TypedAttributePath, SubscriptionTransaction], None]:
++        return self._onRawAttributeChangeCb
++
+     @property
+     def OnEventChangeCb(self) -> Callable[[EventReadResult, SubscriptionTransaction], None]:
+         return self._onEventChangeCb
+@@ -819,14 +842,19 @@ class AsyncReadTransaction:
+     def _handleReportEnd(self):
+         if self._subscription_handler is not None:
+             for change in self._changedPathSet:
+-                try:
+-                    attribute_path = TypedAttributePath(Path=change)
+-                except (KeyError, ValueError) as err:
+-                    # path could not be resolved into a TypedAttributePath
+-                    LOGGER.exception(err)
+-                    continue
+-                self._subscription_handler.OnAttributeChangeCb(
+-                    attribute_path, self._subscription_handler)
++                if self._subscription_handler.OnAttributeChangeCb:
++                    try:
++                        attribute_path = TypedAttributePath(Path=change)
++                    except (KeyError, ValueError) as err:
++                        # path could not be resolved into a TypedAttributePath
++                        LOGGER.exception(err)
++                        continue
++                    self._subscription_handler.OnAttributeChangeCb(
++                        attribute_path, self._subscription_handler)
++
++                if self._subscription_handler.OnRawAttributeChangeCb:
++                    self._subscription_handler.OnRawAttributeChangeCb(
++                        change, self._subscription_handler)
+ 
+             self._subscription_handler.OnReportEndCb(self._subscription_handler)
+             # Clear it out once we've notified of all changes in this transaction.
+-- 
+2.51.2
+

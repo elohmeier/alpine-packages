@@ -1,0 +1,36 @@
+From ddcbcb91ab0019ca22a4562fc408cd11911dcc2f Mon Sep 17 00:00:00 2001
+From: Stefan Agner <stefan@agner.ch>
+Date: Fri, 7 Nov 2025 17:48:03 +0100
+Subject: [PATCH] [python] fix wheel package name vendorizing
+
+Vendorizing the wheel package name broke with the rename from chip to
+matter in #40751. This fixes vendorizing the package name.
+---
+ src/controller/python/BUILD.gn | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/controller/python/BUILD.gn b/src/controller/python/BUILD.gn
+index cdc70db7fb..26f6fc7c26 100644
+--- a/src/controller/python/BUILD.gn
++++ b/src/controller/python/BUILD.gn
+@@ -338,7 +338,7 @@ matter_python_wheel_action("matter-core") {
+     "deprecation",
+     "ecdsa",
+     "ipdb",
+-    "matter-clusters",
++    "${chip_python_package_prefix}-clusters",
+     "pyyaml",
+     "rich",
+   ]
+@@ -448,7 +448,7 @@ matter_python_wheel_action("matter-repl") {
+     "pyobjc-framework-corebluetooth ; sys_platform==\"darwin\"",
+     "dbus-python==1.2.18 ; sys_platform==\"linux\"",
+     "pygobject==3.50.0 ; sys_platform==\"linux\"",
+-    "matter-core",
++    "${chip_python_package_prefix}-core",
+   ]
+ 
+   py_package_name = "${chip_python_package_prefix}-repl"
+-- 
+2.51.2
+
