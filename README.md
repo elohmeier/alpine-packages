@@ -73,6 +73,59 @@ rc-update add home-assistant default
 - **Data:** `/var/lib/homeassistant`
 - **Integrations:** MQTT, ZHA (Zigbee), Z-Wave JS, ESPHome, HomeKit
 
+**Alpine/musl limitation:** The `dhcp` component requires `netifaces` which doesn't compile on musl libc. Replace `default_config:` in your `configuration.yaml` with individual components:
+
+<details>
+<summary>Click to expand configuration.yaml example</summary>
+
+```yaml
+# Individual components (excluding dhcp for Alpine compatibility)
+assist_pipeline:
+backup:
+bluetooth:
+cloud:
+config:
+conversation:
+counter:
+energy:
+frontend:
+hardware:
+history:
+homeassistant_alerts:
+image_upload:
+input_boolean:
+input_button:
+input_datetime:
+input_number:
+input_select:
+input_text:
+logbook:
+logger:
+map:
+media_source:
+mobile_app:
+my:
+network:
+person:
+schedule:
+scene:
+script: !include scripts.yaml
+ssdp:
+stream:
+sun:
+system_health:
+tag:
+timer:
+usb:
+webhook:
+zeroconf:
+zone:
+
+automation: !include automations.yaml
+```
+
+</details>
+
 ### matter-server
 
 WebSocket-based Matter controller that integrates with Home Assistant.
