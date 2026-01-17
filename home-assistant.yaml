@@ -1,7 +1,7 @@
 package:
   name: home-assistant
   version: 2026.1.2
-  epoch: 7
+  epoch: 8
   description: "Home Assistant Core - Open-source home automation platform"
   copyright:
     - license: Apache-2.0
@@ -112,6 +112,7 @@ pipeline:
 
       # Core dependencies that need to be pre-built (have C extensions)
       ha-ffmpeg
+      pynacl
 
       # Audio/media metadata
       mutagen
