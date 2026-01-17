@@ -43,6 +43,12 @@ apk update
 |---------|-------------|---------------|
 | **prusalink** | PrusaLink for Prusa 3D printers | x86_64, aarch64, armhf |
 
+### Languages
+
+| Package | Description | Architectures |
+|---------|-------------|---------------|
+| **python314** | Python 3.14 - High-level scripting language with PGO/LTO optimizations | x86_64, aarch64 |
+
 ### Libraries
 
 | Package | Description | Architectures |
@@ -125,6 +131,18 @@ rc-update add zwave-js-ui default
 - **Hardware:** Z-Wave USB sticks (Aeotec, Zooz, etc.)
 
 Configure Home Assistant Z-Wave JS integration to connect to `ws://HOST:3000`.
+
+### python314
+
+Python 3.14 with PGO (Profile-Guided Optimization) and LTO (Link-Time Optimization). Built for musl libc with zstd compression support.
+
+```sh
+apk add python314
+```
+
+- **Binary:** `/usr/bin/python3.14`
+- **Features:** PGO, LTO, zstd compression (stdlib), shared library
+- **Note:** Used as a build dependency for home-assistant package
 
 ## Building Locally
 

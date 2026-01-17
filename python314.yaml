@@ -1,0 +1,157 @@
+package:
+  name: python314
+  version: 3.14.2
+  epoch: 0
+  description: "Python 3.14 - High-level scripting language"
+  copyright:
+    - license: PSF-2.0
+  options:
+    no-depends: true
+  dependencies:
+    runtime:
+      - libffi
+      - libssl3
+      - zlib
+      - xz-libs
+      - zstd-libs
+      - sqlite-libs
+      - readline
+      - ncurses-libs
+      - bzip2
+      - expat
+      - mpdecimal
+      - gdbm
+  target-architecture:
+    - x86_64
+    - aarch64
+  checks:
+    disabled:
+      - usrmerge
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/edge/main
+      - https://dl-cdn.alpinelinux.org/alpine/edge/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+      - ca-certificates
+      - ca-certificates-bundle
+      - build-base
+      - linux-headers
+      - bzip2-dev
+      - expat-dev
+      - gdbm-dev
+      - libffi-dev
+      - mpdecimal-dev
+      - ncurses-dev
+      - openssl-dev
+      - readline-dev
+      - sqlite-dev
+      - xz-dev
+      - zlib-dev
+      - zstd-dev
+      - bluez-headers
+      - musl-libintl
+      - patch
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://www.python.org/ftp/python/${{package.version}}/Python-${{package.version}}.tar.xz
+      expected-sha256: ce543ab854bc256b61b71e9b27f831ffd1bfd60a479d639f8be7f9757cf573e9
+
+  # Apply musl compatibility patch
+  - runs: |
+      patch -p1 < python314/musl-find_library.patch || true
+
+  # Remove bundled expat to force system library
+  - runs: |
+      rm -rf Modules/expat
+
+  # Configure Python
+  - runs: |
+      # Set thread stack size to 2MB to prevent segfaults before recursion limit
+      STACKSIZE=0x200000
+
+      export CFLAGS_NODIST="-O2 -DTHREAD_STACK_SIZE=$STACKSIZE"
+      export CXXFLAGS_NODIST="-O2"
+      export LDFLAGS_NODIST="-Wl,-z,stack-size=$STACKSIZE"
+
+      # Don't propagate flags to extension modules
+      unset LDFLAGS CFLAGS CXXFLAGS CPPFLAGS
+
+      ./configure \
+        --prefix=/usr \
+        --enable-ipv6 \
+        --enable-loadable-sqlite-extensions \
+        --enable-optimizations \
+        --enable-shared \
+        --with-lto \
+        --with-computed-gotos \
+        --with-dbmliborder=gdbm:ndbm \
+        --with-system-expat \
+        --with-system-libmpdec \
+        --without-ensurepip
+
+  # Build Python
+  - runs: |
+      make -j$(nproc)
+
+  # Install Python
+  - runs: |
+      make -j1 DESTDIR="${{targets.destdir}}" install
+
+      # Install license
+      install -Dm644 LICENSE "${{targets.destdir}}"/usr/share/licenses/${{package.name}}/LICENSE
+
+      # Install EXTERNALLY-MANAGED marker (PEP 668)
+      install -Dm644 python314/externally-managed \
+        "${{targets.destdir}}"/usr/lib/python3.14/EXTERNALLY-MANAGED
+
+      # Remove tkinter and idle (not needed for server use)
+      rm -rf "${{targets.destdir}}"/usr/bin/idle* \
+             "${{targets.destdir}}"/usr/lib/python3.14/idlelib \
+             "${{targets.destdir}}"/usr/lib/python3.14/tkinter \
+             "${{targets.destdir}}"/usr/lib/python3.14/turtle* \
+             "${{targets.destdir}}"/usr/lib/python3.14/turtledemo
+
+      # Remove test suite to save space
+      rm -rf "${{targets.destdir}}"/usr/lib/python3.14/test
+      rm -rf "${{targets.destdir}}"/usr/lib/python3.14/*/test
+      rm -rf "${{targets.destdir}}"/usr/lib/python3.14/*/tests
+
+      # Create unversioned symlinks
+      cd "${{targets.destdir}}"/usr/bin
+      ln -sf python3.14 python3
+      ln -sf python3.14 python
+      ln -sf python3.14-config python3-config
+      ln -sf python3.14-config python-config
+      ln -sf pydoc3.14 pydoc3
+      ln -sf pydoc3.14 pydoc
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/edge/main
+        - https://dl-cdn.alpinelinux.org/alpine/edge/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+  pipeline:
+    - runs: |
+        python3.14 --version
+    - runs: |
+        python3.14 -c "import sys; print(f'Python {sys.version}')"
+    - runs: |
+        python3.14 -c "import sqlite3; print('sqlite3 OK')"
+    - runs: |
+        python3.14 -c "import ssl; print('ssl OK')"
+    - runs: |
+        python3.14 -c "import ctypes; print('ctypes OK')"
+    - runs: |
+        python3.14 -c "import compression.zstd; print('zstd OK')"

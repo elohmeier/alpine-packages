@@ -1,0 +1,20 @@
+[externally-managed]
+Error=
+ This Python installation is managed by the system package manager (apk).
+
+ If the package in question is not packaged already, please consider
+ installing it inside a virtual environment, e.g.:
+
+   python3.14 -m venv /path/to/venv
+   . /path/to/venv/bin/activate
+   pip install mypackage
+
+ To exit the virtual environment, run:
+
+   deactivate
+
+ The virtual environment is not deleted, and can be re-entered by re-sourcing
+ the activate file.
+
+ To automatically manage virtual environments, consider using pipx (from the
+ pipx package).

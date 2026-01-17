@@ -1,7 +1,7 @@
 package:
   name: home-assistant
-  version: 2025.1.4
-  epoch: 1
+  version: 2026.1.2
+  epoch: 0
   description: "Home Assistant Core - Open-source home automation platform"
   copyright:
     - license: Apache-2.0
@@ -10,8 +10,7 @@ package:
     no-depends: true
   dependencies:
     runtime:
-      - python3
-      - py3-numpy
+      - python314
       - libjpeg-turbo
       - libturbojpeg
       - ffmpeg-libs
@@ -71,12 +70,8 @@ environment:
       - busybox
       - ca-certificates
       - build-base
-      - python3
-      - python3-dev
-      - py3-pip
-      - py3-setuptools
-      - py3-wheel
-      - py3-numpy
+      - python314
+      - uv
       - libjpeg-turbo-dev
       - libturbojpeg
       - ffmpeg-dev
@@ -96,11 +91,7 @@ environment:
     UV_CACHE_DIR: /var/cache/melange/uv
 
 pipeline:
-  # Step 1: Install uv (bypass PEP 668 protection in build environment)
-  - runs: |
-      python3 -m pip install --break-system-packages uv
-
-  # Step 2: Create requirements.in with all desired packages
+  # Step 1: Create requirements.in with all desired packages
   - runs: |
       cat > requirements.in << 'EOF'
       # Home Assistant Core
@@ -144,21 +135,24 @@ pipeline:
       PyTurboJPEG
       EOF
 
-  # Step 3: Use uv to compile a complete lockfile with all dependencies resolved
+  # Step 2: Use uv to compile a complete lockfile with all dependencies resolved
   - runs: |
       uv pip compile requirements.in \
         --python-platform linux \
-        --python-version 3.12 \
+        --python-version 3.14 \
         --prerelease=allow \
         --no-annotate \
         --output-file requirements.lock
 
       echo "=== Generated lockfile with $(wc -l < requirements.lock) packages ==="
 
-  # Step 4: Create a venv and install all packages
+  # Step 3: Create a venv and install all packages
   - runs: |
+      # Remove PEP 668 marker to allow venv's ensurepip to work
+      rm -f /usr/lib/python3.14/EXTERNALLY-MANAGED
+
       # Create venv in the target location
-      python3 -m venv "${{targets.destdir}}/opt/home-assistant"
+      python3.14 -m venv "${{targets.destdir}}/opt/home-assistant"
 
       # Activate and install using uv (much faster than pip)
       . "${{targets.destdir}}/opt/home-assistant/bin/activate"
@@ -168,15 +162,12 @@ pipeline:
         --compile-bytecode \
         -r requirements.lock
 
-      # Remove numpy from venv (use system py3-numpy instead to save space)
-      rm -rf "${{targets.destdir}}/opt/home-assistant/lib/python3.12/site-packages/numpy"* || true
-
       # Fix permissions on venv lock file
       chmod 644 "${{targets.destdir}}/opt/home-assistant/.lock" || true
 
       deactivate
 
-  # Step 5: Create wrapper script that uses the venv
+  # Step 4: Create wrapper script that uses the venv
   - runs: |
       install -dm755 "${{targets.destdir}}"/usr/bin
 
@@ -186,7 +177,7 @@ pipeline:
       EOF
       chmod 755 "${{targets.destdir}}"/usr/bin/hass
 
-  # Step 6: Install OpenRC scripts and supporting files
+  # Step 5: Install OpenRC scripts and supporting files
   - runs: |
       install -Dm755 home-assistant/home-assistant.initd "${{targets.destdir}}"/etc/init.d/home-assistant
       install -Dm644 home-assistant/home-assistant.confd "${{targets.destdir}}"/etc/conf.d/home-assistant
@@ -195,7 +186,7 @@ pipeline:
       # Create data directory
       install -dm755 "${{targets.destdir}}"/var/lib/homeassistant
 
-  # Step 7: Save the lockfile for reproducibility and future updates
+  # Step 6: Save the lockfile for reproducibility and future updates
   - runs: |
       install -Dm644 requirements.lock "${{targets.destdir}}"/opt/home-assistant/requirements.lock
       install -Dm644 requirements.in "${{targets.destdir}}"/opt/home-assistant/requirements.in
@@ -208,6 +199,8 @@ test:
         - https://dl-cdn.alpinelinux.org/alpine/edge/community
       keyring:
         - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
   pipeline:
     - runs: |
         # Test that homeassistant module can be imported

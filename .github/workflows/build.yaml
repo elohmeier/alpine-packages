@@ -38,6 +38,7 @@ jobs:
       build-pivccu-modules-dkms: ${{ steps.matrix.outputs.build-pivccu-modules-dkms }}
       build-home-assistant: ${{ steps.matrix.outputs.build-home-assistant }}
       build-zwave-js-ui: ${{ steps.matrix.outputs.build-zwave-js-ui }}
+      build-python314: ${{ steps.matrix.outputs.build-python314 }}
       any-builds: ${{ steps.matrix.outputs.any-builds }}
     steps:
       - uses: actions/checkout@v4
@@ -81,6 +82,9 @@ jobs:
             zwave-js-ui:
               - 'zwave-js-ui.yaml'
               - 'zwave-js-ui/**'
+            python314:
+              - 'python314.yaml'
+              - 'python314/**'
             workflow:
               - '.github/workflows/build.yaml'
 
@@ -116,7 +120,7 @@ jobs:
           }
 
           # Check each package
-          for pkg in zap-cli chip-sdk matter-server otbr prusalink detect-radio-module gcompat-custom occu occu-java occu-webui pivccu-modules-dkms home-assistant zwave-js-ui; do
+          for pkg in zap-cli chip-sdk matter-server otbr prusalink detect-radio-module gcompat-custom occu occu-java occu-webui pivccu-modules-dkms home-assistant zwave-js-ui python314; do
             yaml_ver=$(get_yaml_version "$pkg")
             published_ver=$(get_published_version "$pkg")
 
@@ -148,6 +152,7 @@ jobs:
           FILE_PIVCCU_DKMS: ${{ steps.file-changes.outputs.pivccu-modules-dkms }}
           FILE_HOME_ASSISTANT: ${{ steps.file-changes.outputs.home-assistant }}
           FILE_ZWAVE_JS_UI: ${{ steps.file-changes.outputs.zwave-js-ui }}
+          FILE_PYTHON314: ${{ steps.file-changes.outputs.python314 }}
           FILE_WORKFLOW: ${{ steps.file-changes.outputs.workflow }}
           VERSION_ZAP: ${{ steps.version-check.outputs.zap_cli_version_changed }}
           VERSION_CHIP: ${{ steps.version-check.outputs.chip_sdk_version_changed }}
@@ -162,6 +167,7 @@ jobs:
           VERSION_PIVCCU_DKMS: ${{ steps.version-check.outputs.pivccu_modules_dkms_version_changed }}
           VERSION_HOME_ASSISTANT: ${{ steps.version-check.outputs.home_assistant_version_changed }}
           VERSION_ZWAVE_JS_UI: ${{ steps.version-check.outputs.zwave_js_ui_version_changed }}
+          VERSION_PYTHON314: ${{ steps.version-check.outputs.python314_version_changed }}
           REBUILD_ALL: ${{ inputs.rebuild_all }}
         run: |
           set -e
@@ -179,6 +185,7 @@ jobs:
           build_pivccu_dkms="false"
           build_home_assistant="false"
           build_zwave_js_ui="false"
+          build_python314="false"
 
           # Workflow changes or rebuild_all triggers full rebuild
           if [[ "$FILE_WORKFLOW" == "true" ]] || [[ "$REBUILD_ALL" == "true" ]]; then
@@ -196,6 +203,7 @@ jobs:
             build_pivccu_dkms="true"
             build_home_assistant="true"
             build_zwave_js_ui="true"
+            build_python314="true"
           else
             # Check individual packages: files changed AND version differs
             if [[ "$FILE_ZAP" == "true" ]]; then
@@ -301,6 +309,14 @@ jobs:
                 echo "::warning::zwave-js-ui files changed but version not bumped - skipping build"
               fi
             fi
+
+            if [[ "$FILE_PYTHON314" == "true" ]]; then
+              if [[ "$VERSION_PYTHON314" == "true" ]]; then
+                build_python314="true"
+              else
+                echo "::warning::python314 files changed but version not bumped - skipping build"
+              fi
+            fi
           fi
 
           # DEPENDENCY PROPAGATION
@@ -338,6 +354,12 @@ jobs:
             build_occu_webui="true"
           fi
 
+          # If python314 rebuilds, home-assistant must rebuild (build-time dependency)
+          if [[ "$build_python314" == "true" && "$build_home_assistant" != "true" ]]; then
+            echo "::notice::home-assistant will rebuild due to python314 dependency"
+            build_home_assistant="true"
+          fi
+
           # Output results
           echo "build-zap-cli=$build_zap" >> "$GITHUB_OUTPUT"
           echo "build-chip-sdk=$build_chip" >> "$GITHUB_OUTPUT"
@@ -352,9 +374,10 @@ jobs:
           echo "build-pivccu-modules-dkms=$build_pivccu_dkms" >> "$GITHUB_OUTPUT"
           echo "build-home-assistant=$build_home_assistant" >> "$GITHUB_OUTPUT"
           echo "build-zwave-js-ui=$build_zwave_js_ui" >> "$GITHUB_OUTPUT"
+          echo "build-python314=$build_python314" >> "$GITHUB_OUTPUT"
 
           # Check if any builds needed
-          if [[ "$build_zap" == "true" || "$build_chip" == "true" || "$build_matter" == "true" || "$build_otbr" == "true" || "$build_prusalink" == "true" || "$build_detect_radio" == "true" || "$build_gcompat" == "true" || "$build_occu" == "true" || "$build_occu_java" == "true" || "$build_occu_webui" == "true" || "$build_pivccu_dkms" == "true" || "$build_home_assistant" == "true" || "$build_zwave_js_ui" == "true" ]]; then
+          if [[ "$build_zap" == "true" || "$build_chip" == "true" || "$build_matter" == "true" || "$build_otbr" == "true" || "$build_prusalink" == "true" || "$build_detect_radio" == "true" || "$build_gcompat" == "true" || "$build_occu" == "true" || "$build_occu_java" == "true" || "$build_occu_webui" == "true" || "$build_pivccu_dkms" == "true" || "$build_home_assistant" == "true" || "$build_zwave_js_ui" == "true" || "$build_python314" == "true" ]]; then
             echo "any-builds=true" >> "$GITHUB_OUTPUT"
           else
             echo "any-builds=false" >> "$GITHUB_OUTPUT"
@@ -378,6 +401,7 @@ jobs:
           echo "| pivccu-modules-dkms | $build_pivccu_dkms |" >> "$GITHUB_STEP_SUMMARY"
           echo "| home-assistant | $build_home_assistant |" >> "$GITHUB_STEP_SUMMARY"
           echo "| zwave-js-ui | $build_zwave_js_ui |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| python314 | $build_python314 |" >> "$GITHUB_STEP_SUMMARY"
 
   # ===========================================
   # Phase 2: Build standalone packages (parallel)
@@ -1202,8 +1226,11 @@ jobs:
           if-no-files-found: ignore
 
   build-home-assistant:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.build-home-assistant == 'true'
+    needs: [detect-changes, build-python314]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.build-home-assistant == 'true' &&
+      (needs.build-python314.result == 'success' || needs.build-python314.result == 'skipped')
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: true
@@ -1225,6 +1252,7 @@ jobs:
         run: |
           echo "${{ secrets.ABUILD_PRIVKEY }}" > melange.pem
           openssl rsa -in melange.pem -out packages@elohmeier.rsa -traditional 2>/dev/null || cp melange.pem packages@elohmeier.rsa
+          openssl rsa -in packages@elohmeier.rsa -pubout -out packages@elohmeier.rsa.pub
           chmod 600 packages@elohmeier.rsa
           rm -f melange.pem
 
@@ -1240,11 +1268,43 @@ jobs:
           restore-keys: |
             melange-home-assistant-${{ matrix.arch }}-
 
+      # Get python314 from artifact (if rebuilt) or published repo (if skipped)
+      - name: Download python314 artifact
+        if: needs.detect-changes.outputs.build-python314 == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}-python314
+          path: packages/${{ matrix.arch }}
+
+      - name: Fetch published python314
+        if: needs.detect-changes.outputs.build-python314 != 'true'
+        run: |
+          mkdir -p packages/${{ matrix.arch }}
+          curl -sL "${REPO_URL}/${{ matrix.arch }}/APKINDEX.tar.gz" | tar -xzO APKINDEX > /tmp/APKINDEX
+          pkg_version=$(awk '/^P:python314/{found=1} found && /^V:/{print substr($0,3); exit}' /tmp/APKINDEX)
+          if [[ -n "$pkg_version" ]]; then
+            pkg_file="python314-${pkg_version}.apk"
+            echo "Fetching published python314: $pkg_file"
+            curl -sL "${REPO_URL}/${{ matrix.arch }}/${pkg_file}" -o "packages/${{ matrix.arch }}/${pkg_file}"
+          fi
+
+      - name: Generate local repo index
+        run: |
+          if ls packages/${{ matrix.arch }}/*.apk 2>/dev/null | grep -q .; then
+            melange index \
+              --signing-key packages@elohmeier.rsa \
+              --arch ${{ matrix.arch }} \
+              -o packages/${{ matrix.arch }}/APKINDEX.tar.gz \
+              packages/${{ matrix.arch }}/*.apk
+          fi
+
       - name: Build home-assistant
         run: |
           sudo melange build home-assistant.yaml \
             --arch ${{ matrix.arch }} \
             --signing-key packages@elohmeier.rsa \
+            --keyring-append packages@elohmeier.rsa.pub \
+            --repository-append packages/ \
             --out-dir packages/ \
             --cache-dir cache/ \
             --generate-index=false
@@ -1311,11 +1371,66 @@ jobs:
           path: packages/${{ matrix.arch }}
           if-no-files-found: ignore
 
+  build-python314:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.build-python314 == 'true'
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        arch: [x86_64, aarch64]
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: chainguard-dev/actions/setup-melange@main
+        with:
+          version: latest-release
+
+      - name: Setup signing key
+        run: |
+          echo "${{ secrets.ABUILD_PRIVKEY }}" > melange.pem
+          openssl rsa -in melange.pem -out packages@elohmeier.rsa -traditional 2>/dev/null || cp melange.pem packages@elohmeier.rsa
+          chmod 600 packages@elohmeier.rsa
+          rm -f melange.pem
+
+      - name: Setup cache directory
+        run: |
+          mkdir -p cache
+          sudo chmod 777 cache
+
+      - uses: actions/cache@v4
+        with:
+          path: cache
+          key: melange-python314-${{ matrix.arch }}-${{ hashFiles('python314.yaml') }}
+          restore-keys: |
+            melange-python314-${{ matrix.arch }}-
+
+      - name: Build python314
+        run: |
+          sudo melange build python314.yaml \
+            --arch ${{ matrix.arch }} \
+            --signing-key packages@elohmeier.rsa \
+            --out-dir packages/ \
+            --cache-dir cache/ \
+            --generate-index=false
+          sudo chown -R runner:runner packages/ cache/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}-python314
+          path: packages/${{ matrix.arch }}
+          if-no-files-found: ignore
+
   # ===========================================
   # Phase 4: Publish to GitHub Pages
   # ===========================================
   publish:
-    needs: [detect-changes, build-prusalink, build-otbr, build-zap-cli, build-chip-sdk, build-matter-server, build-detect-radio-module, build-gcompat-custom, build-occu, build-occu-java, build-occu-webui, build-pivccu-modules-dkms, build-home-assistant, build-zwave-js-ui]
+    needs: [detect-changes, build-prusalink, build-otbr, build-zap-cli, build-chip-sdk, build-matter-server, build-detect-radio-module, build-gcompat-custom, build-occu, build-occu-java, build-occu-webui, build-pivccu-modules-dkms, build-home-assistant, build-zwave-js-ui, build-python314]
     if: |
       always() &&
       github.ref == 'refs/heads/main' &&
