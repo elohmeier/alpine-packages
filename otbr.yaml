@@ -26,6 +26,29 @@ package:
       adduser -S -D -H -h /var/lib/otbr -s /sbin/nologin -G otbr \
         -g "OpenThread Border Router" otbr 2>/dev/null || true
       adduser otbr dialout 2>/dev/null || true
+    post-install: |
+      #!/bin/sh
+      echo ""
+      echo "=== OTBR installed ==="
+      echo ""
+      echo "Quick start:"
+      echo "  rc-service otbr-agent start"
+      echo "  rc-update add otbr-agent default"
+      echo ""
+      echo "Config files:"
+      echo "  /etc/conf.d/otbr-agent    Service options (radio URL, interface)"
+      echo ""
+      echo "Ports:"
+      echo "  8081  REST API"
+      echo ""
+      echo "Tools:"
+      echo "  ot-ctl                    Thread CLI for diagnostics"
+      echo ""
+      echo "Hardware:"
+      echo "  Requires Thread RCP firmware on radio (e.g., SkyConnect, Yellow)"
+      echo "  Set OTBR_AGENT_OPTS in /etc/conf.d/otbr-agent with radio URL"
+      echo "  Example: OTBR_AGENT_OPTS='-I wpan0 -B eth0 spinel+hdlc+uart:///dev/ttyUSB0'"
+      echo ""
 
 environment:
   contents:

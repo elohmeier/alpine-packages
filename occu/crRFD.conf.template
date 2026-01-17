@@ -1,0 +1,55 @@
+# HomeMatic IP RF Configuration
+# This file is auto-generated. Manual changes may be overwritten.
+# For custom settings, use /etc/occu/config/hmip_user.conf
+
+# Adapter Configuration - auto-detected
+# Adapter.1.Type will be set by init script based on detected hardware
+# Adapter.1.Port will be set to the detected device path
+
+Config.Dir=/etc/config/crRFD
+Config.Include=hmip_user.conf
+
+# Directory Configuration
+Persistence.Home=/etc/config/crRFD/data
+FirmwareUpdate.BG.OTAU.Home=/usr/share/occu/firmware
+FirmwareUpdate.BG.OTAU.divergent.device.type.definition.file=/opt/HmIP/crrfd.fwfix
+
+# Legacy API Configuration (XML-RPC interface)
+API.1.Type=XML-RPC
+Legacy.Encoding=ISO-8859-1
+Legacy.ResponseTimeout=20
+Legacy.ReplacementURL=127.0.0.1
+Legacy.Parameter.Definition.File=/opt/HmIP/legacy-parameter-definition.config
+Legacy.AddressPrefix=3014F711A0
+Legacy.SwitchTypeAndSubtype=true
+Legacy.HandlersFilename=/var/LegacyService.handlers
+Legacy.DiscardDutyCycleEvents=true
+Legacy.SendUDPServiceMessages=true
+Legacy.Port=32010
+Legacy.VirtualRemoteControl.Enabled=true
+Legacy.CallDeleteDevicesForChangedDevices=false
+Legacy.Client.Connection.Timeout=600000
+Legacy.Client.Socket.Timeout=600000
+Legacy.VirtualRemoteControl.MigrationGate.Enabled=true
+Legacy.VirtualRemoteControl.MigrationGate.File=/var/tmp/vrcMigrationGate
+Legacy.Valve.Auto.Adaption=true
+
+# HmIP-Routing
+Adapter.Remote.Enabled=false
+Adapter.Local.Device.Enabled=true
+Adapter.Local.Listener.Mode=RADIO
+Lan.Routing.Enabled=true
+
+# Miscellaneous Configuration
+CyclicTimeout.TimerStartMaxDelay=90
+CyclicTimeout.TimerCycleTime=600
+Legacy.Parameter.ReplaceEnumValueWithOrdinal=true
+Statemanagement.Restore.Enabled=true
+Statemanagement.Restore.Delay=15000
+
+# Local key server (no internet required)
+KeyServer.Mode=KEYSERVER_LOCAL
+
+Vertx.WorkerPoolSize=5
+Transaction.TimeToLive.Check=true
+Transaction.DiscardIfUnreachable=true

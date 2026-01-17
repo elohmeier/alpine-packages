@@ -1,0 +1,211 @@
+#!/bin/sh
+# OCCU RF Hardware Detection Script
+# Detects HomeMatic RF hardware and generates appropriate configuration
+
+set -e
+
+CONFIG_DIR="${CONFIG_DIR:-/etc/occu/config}"
+TEMPLATE_DIR="${TEMPLATE_DIR:-/etc/occu/config_templates}"
+
+# Detection results
+HMIP_DEVICE=""
+HMIP_TYPE=""
+BIDCOS_DEVICE=""
+BIDCOS_TYPE=""
+
+log() {
+    logger -t occu-detect-rf "$@"
+    echo "$@"
+}
+
+# Detect HmIP-RFUSB (USB stick)
+detect_hmip_rfusb() {
+    # Check for symlink created by udev
+    if [ -e /dev/ttyHmIP-RFUSB ]; then
+        HMIP_DEVICE="/dev/ttyHmIP-RFUSB"
+        HMIP_TYPE="HMIP_CCU2"
+        log "Detected HmIP-RFUSB at $HMIP_DEVICE"
+        return 0
+    fi
+
+    # Fallback: check for cp210x device with correct vendor/product
+    for tty in /sys/class/tty/ttyUSB*; do
+        [ -d "$tty" ] || continue
+        device=$(readlink -f "$tty/device/..")
+        if [ -f "$device/idVendor" ] && [ -f "$device/idProduct" ]; then
+            vendor=$(cat "$device/idVendor")
+            product=$(cat "$device/idProduct")
+            if [ "$vendor" = "1b1f" ] && [ "$product" = "c020" ]; then
+                HMIP_DEVICE="/dev/$(basename $tty)"
+                HMIP_TYPE="HMIP_CCU2"
+                log "Detected HmIP-RFUSB at $HMIP_DEVICE"
+                return 0
+            fi
+        fi
+    done
+    return 1
+}
+
+# Detect HM-MOD-RPI-PCB or RPI-RF-MOD via mmd devices
+detect_rf_module_mmd() {
+    if [ -c /dev/mmd_hmip ]; then
+        HMIP_DEVICE="/dev/mmd_hmip"
+        HMIP_TYPE="HMIP_CCU2"
+        log "Detected RF module (mmd_hmip) at $HMIP_DEVICE"
+    fi
+
+    if [ -c /dev/mmd_bidcos ]; then
+        BIDCOS_DEVICE="/dev/mmd_bidcos"
+        BIDCOS_TYPE="CCU2"
+        log "Detected RF module (mmd_bidcos) at $BIDCOS_DEVICE"
+    fi
+
+    [ -n "$HMIP_DEVICE" ] || [ -n "$BIDCOS_DEVICE" ]
+}
+
+# Detect RF module via detect_radio_module tool
+detect_rf_module_tool() {
+    if ! command -v detect_radio_module >/dev/null 2>&1; then
+        return 1
+    fi
+
+    local result
+    result=$(detect_radio_module 2>/dev/null) || return 1
+
+    local module_type
+    module_type=$(echo "$result" | grep "^Radio Module:" | cut -d: -f2 | tr -d ' ')
+
+    case "$module_type" in
+        HM-MOD-RPI-PCB|RPI-RF-MOD)
+            log "Detected $module_type via detect_radio_module"
+            # The mmd devices should exist if kernel modules are loaded
+            detect_rf_module_mmd
+            ;;
+        HMIP-RFUSB)
+            detect_hmip_rfusb
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+# Generate crRFD.conf for HmIP
+generate_crRFD_conf() {
+    [ -n "$HMIP_DEVICE" ] || return 1
+
+    local conf_file="$CONFIG_DIR/crRFD.conf"
+    local template="$TEMPLATE_DIR/crRFD.conf"
+
+    # Start with template if exists
+    if [ -f "$template" ]; then
+        cp "$template" "$conf_file"
+    else
+        # Create minimal config
+        cat > "$conf_file" << 'EOF'
+Config.Dir=/etc/config/crRFD
+Persistence.Home=/etc/config/crRFD/data
+Legacy.Port=32010
+KeyServer.Mode=KEYSERVER_LOCAL
+EOF
+    fi
+
+    # Add adapter configuration at the beginning
+    local temp_file=$(mktemp)
+    cat > "$temp_file" << EOF
+# Auto-detected adapter configuration
+Adapter.1.Type=$HMIP_TYPE
+Adapter.1.Port=$HMIP_DEVICE
+
+EOF
+    cat "$conf_file" >> "$temp_file"
+    mv "$temp_file" "$conf_file"
+
+    log "Generated $conf_file with $HMIP_TYPE at $HMIP_DEVICE"
+}
+
+# Generate HMServer.conf
+generate_HMServer_conf() {
+    local conf_file="$CONFIG_DIR/HMServer.conf"
+    local template="$TEMPLATE_DIR/HMServer.conf"
+
+    if [ -f "$conf_file" ]; then
+        log "HMServer.conf already exists, skipping"
+        return 0
+    fi
+
+    if [ -f "$template" ]; then
+        cp "$template" "$conf_file"
+    else
+        cat > "$conf_file" << 'EOF'
+hmServerPort=9292
+regaPort=31999
+diagramDatabasePath=/var/lib/occu/measurement
+EOF
+    fi
+
+    log "Generated $conf_file"
+}
+
+# Create required directories
+create_directories() {
+    mkdir -p "$CONFIG_DIR/crRFD/data"
+    mkdir -p /etc/config/crRFD/data
+    mkdir -p /var/lib/occu/measurement
+    mkdir -p /var/tmp
+    mkdir -p /var/lock
+
+    # Create /boot/VERSION if missing (required by HMIPServer)
+    if [ ! -f /boot/VERSION ]; then
+        mkdir -p /boot
+        echo "3.85.7" > /boot/VERSION
+    fi
+}
+
+# Main detection flow
+main() {
+    log "Starting RF hardware detection..."
+
+    create_directories
+
+    # Try detection methods in order of preference
+    detect_rf_module_tool || detect_rf_module_mmd || detect_hmip_rfusb || true
+
+    if [ -z "$HMIP_DEVICE" ] && [ -z "$BIDCOS_DEVICE" ]; then
+        log "No HomeMatic RF hardware detected"
+        echo "NO_HARDWARE"
+        return 1
+    fi
+
+    # Generate configurations
+    if [ -n "$HMIP_DEVICE" ]; then
+        generate_crRFD_conf
+        generate_HMServer_conf
+        echo "HMIP:$HMIP_DEVICE"
+    fi
+
+    if [ -n "$BIDCOS_DEVICE" ]; then
+        echo "BIDCOS:$BIDCOS_DEVICE"
+    fi
+
+    log "RF hardware detection complete"
+    return 0
+}
+
+# Allow sourcing for function access
+case "${1:-}" in
+    --detect-only)
+        detect_rf_module_tool || detect_rf_module_mmd || detect_hmip_rfusb
+        [ -n "$HMIP_DEVICE" ] && echo "HMIP_DEVICE=$HMIP_DEVICE"
+        [ -n "$HMIP_TYPE" ] && echo "HMIP_TYPE=$HMIP_TYPE"
+        [ -n "$BIDCOS_DEVICE" ] && echo "BIDCOS_DEVICE=$BIDCOS_DEVICE"
+        [ -n "$BIDCOS_TYPE" ] && echo "BIDCOS_TYPE=$BIDCOS_TYPE"
+        ;;
+    "")
+        main
+        ;;
+    *)
+        echo "Usage: $0 [--detect-only]"
+        exit 1
+        ;;
+esac

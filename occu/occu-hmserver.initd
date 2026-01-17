@@ -1,0 +1,97 @@
+#!/sbin/openrc-run
+
+name="occu-hmserver"
+description="HomeMatic IP Server (Java)"
+
+command="/usr/bin/java"
+command_args="-Xmx128m -Dlog4j.configurationFile=/etc/occu/config/log4j2.xml \
+	-Dfile.encoding=ISO-8859-1 \
+	-jar /opt/HMServer/HMIPServer.jar /etc/occu/config/crRFD.conf /etc/occu/config/HMServer.conf"
+command_user="${HMSERVER_USER:-root}"
+command_background=true
+# gcompat requires LD_PRELOAD to provide fortify functions for native serial library
+export LD_PRELOAD="/lib/libgcompat.so.0"
+pidfile="/run/${RC_SVCNAME}.pid"
+output_log="/var/log/${RC_SVCNAME}.log"
+error_log="/var/log/${RC_SVCNAME}.log"
+
+depend() {
+	need net
+	# occu-rfd only needed for classic BidCos-RF, not for HmIP-only setups
+	use occu-rfd lighttpd
+	after firewall
+	use logger
+}
+
+start_pre() {
+	# Source HM mode if available
+	[ -r /var/hm_mode ] && . /var/hm_mode
+
+	# Check mode
+	if [ "${HM_MODE}" != "NORMAL" ] && [ -n "${HM_MODE}" ]; then
+		eerror "System not in NORMAL mode (HM_MODE=${HM_MODE})"
+		return 1
+	fi
+
+	# Check if Java is available
+	if ! command -v java >/dev/null 2>&1; then
+		eerror "Java not found. Please install openjdk11-jre or similar."
+		return 1
+	fi
+
+	# Check if HMIPServer.jar exists
+	if [ ! -f /opt/HMServer/HMIPServer.jar ]; then
+		eerror "HMIPServer.jar not found at /opt/HMServer/HMIPServer.jar"
+		return 1
+	fi
+
+	# Auto-detect and configure RF hardware if config doesn't exist
+	if [ ! -f /etc/occu/config/crRFD.conf ]; then
+		einfo "No crRFD.conf found, running RF hardware detection..."
+		if command -v occu-detect-rf >/dev/null 2>&1; then
+			if ! occu-detect-rf; then
+				ewarn "No HmIP hardware detected. Please configure manually."
+				ewarn "See /etc/occu/config_templates/crRFD.conf for template."
+				return 1
+			fi
+		else
+			eerror "occu-detect-rf not found. Please configure /etc/occu/config/crRFD.conf manually."
+			return 1
+		fi
+	fi
+
+	# Ensure required directories exist
+	checkpath --directory --mode 0755 /etc/config/crRFD/data
+	checkpath --directory --mode 0755 /var/lib/occu/measurement
+	checkpath --directory --mode 0755 /var/tmp
+	checkpath --directory --mode 0755 /var/lock
+
+	# Create /boot/VERSION for HardwareInfo (Java class expects this)
+	if [ ! -f /boot/VERSION ]; then
+		mkdir -p /boot
+		echo "3.85.7" > /boot/VERSION
+	fi
+
+	# Ensure log4j config exists
+	if [ ! -f /etc/occu/config/log4j2.xml ]; then
+		if [ -f /etc/occu/config_templates/log4j2.xml ]; then
+			cp /etc/occu/config_templates/log4j2.xml /etc/occu/config/log4j2.xml
+		fi
+	fi
+
+	# Ensure HMServer.conf exists
+	if [ ! -f /etc/occu/config/HMServer.conf ]; then
+		if [ -f /etc/occu/config_templates/HMServer.conf ]; then
+			cp /etc/occu/config_templates/HMServer.conf /etc/occu/config/HMServer.conf
+		else
+			# Create minimal config
+			cat > /etc/occu/config/HMServer.conf << 'EOF'
+hmServerPort=9292
+regaPort=31999
+diagramDatabasePath=/var/lib/occu/measurement
+EOF
+		fi
+	fi
+
+	return 0
+}

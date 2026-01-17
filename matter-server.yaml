@@ -26,6 +26,30 @@ package:
         -g "Matter Server" matter 2>/dev/null || true
       # Add to bluetooth group for BLE commissioning (if group exists)
       adduser matter bluetooth 2>/dev/null || true
+    post-install: |
+      #!/bin/sh
+      echo ""
+      echo "=== Matter Server installed ==="
+      echo ""
+      echo "Quick start:"
+      echo "  rc-service matter-server start"
+      echo "  rc-update add matter-server default"
+      echo ""
+      echo "Config files:"
+      echo "  /etc/conf.d/matter-server    Service options"
+      echo ""
+      echo "Ports:"
+      echo "  5580  WebSocket API (Home Assistant, other clients)"
+      echo ""
+      echo "Data:"
+      echo "  /var/lib/matter-server       Persistent storage"
+      echo ""
+      echo "Logs:"
+      echo "  /var/log/matter-server.log"
+      echo ""
+      echo "Integration:"
+      echo "  Home Assistant: Add Matter integration, connect to ws://HOST:5580/ws"
+      echo ""
 
 environment:
   contents:

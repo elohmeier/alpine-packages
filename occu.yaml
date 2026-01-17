@@ -1,0 +1,267 @@
+package:
+  name: occu
+  version: 3.85.7
+  epoch: 5
+  description: "eQ-3 OCCU - HomeMatic CCU Core Components"
+  copyright:
+    - license: HMSL
+      license-path: occu-src/LicenseDE.txt
+  dependencies:
+    runtime:
+      - gcompat-custom
+      - tcl
+      - detect-radio-module
+  target-architecture:
+    - aarch64
+    - x86_64
+  options:
+    no-depends: true
+  checks:
+    disabled:
+      - usrmerge
+  scriptlets:
+    pre-install: |
+      #!/bin/sh
+      addgroup -S hm 2>/dev/null || true
+      addgroup -S dialout 2>/dev/null || true
+      addgroup -S status 2>/dev/null || true
+      adduser -S -D -H -h /var/lib/occu -s /sbin/nologin -G status \
+        -g "hss_led user" hssled 2>/dev/null || true
+      adduser -S -D -H -h /var/lib/occu -s /sbin/nologin \
+        -g "ssdpd user" ssdp 2>/dev/null || true
+    post-install: |
+      #!/bin/sh
+      # Create required directories
+      mkdir -p /etc/config/crRFD/data
+      mkdir -p /var/lib/occu/measurement
+      mkdir -p /var/tmp /var/lock
+
+      # Create /boot/VERSION for HMIPServer
+      if [ ! -f /boot/VERSION ]; then
+        mkdir -p /boot
+        echo "3.85.7" > /boot/VERSION
+      fi
+
+      # Reload udev rules if udevd is running
+      if command -v udevadm >/dev/null 2>&1; then
+        udevadm control --reload-rules 2>/dev/null || true
+        udevadm trigger 2>/dev/null || true
+      fi
+
+      echo ""
+      echo "=== OCCU installed ==="
+      echo ""
+      echo "Quick start:"
+      echo "  rc-service occu-hmserver start"
+      echo "  rc-update add occu-hmserver default"
+      echo ""
+      echo "Config files:"
+      echo "  /etc/occu/config/crRFD.conf    HmIP adapter (auto-generated)"
+      echo "  /etc/occu/config/HMServer.conf HMServer settings"
+      echo "  /etc/conf.d/occu-hmserver      Service options"
+      echo ""
+      echo "Ports:"
+      echo "  32010  XML-RPC API (Home Assistant, ioBroker, etc.)"
+      echo ""
+      echo "Logs:"
+      echo "  /var/log/occu-hmserver.log"
+      echo ""
+      echo "Hardware:"
+      echo "  HmIP-RFUSB: plug-and-play, auto-detected"
+      echo "  RPI-RF-MOD: requires kernel modules (see github.com/alexreinert/piVCCU)"
+      echo ""
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+      - ca-certificates
+      - git
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/OpenCCU/occu.git
+      tag: 3.85.7-2
+      destination: occu-src
+
+  - runs: |
+      cd occu-src
+
+      # Determine architecture
+      ARCH="$(uname -m)"
+      case "$ARCH" in
+        aarch64)
+          OCCU_ARCH="aarch64-linux-gnu"
+          OCCU_COMMON="arm-gnueabihf-gcc8"
+          ;;
+        x86_64)
+          OCCU_ARCH="x86_64-linux-gnu"
+          OCCU_COMMON="X86_32_GCC8"
+          ;;
+        *)
+          echo "Unsupported architecture: $ARCH"
+          exit 1
+          ;;
+      esac
+
+      DESTDIR="${{targets.destdir}}"
+
+      # Create directories
+      mkdir -p "$DESTDIR/usr/bin"
+      mkdir -p "$DESTDIR/usr/lib"
+      mkdir -p "$DESTDIR/etc/occu/config_templates"
+      mkdir -p "$DESTDIR/etc/occu/config"
+      mkdir -p "$DESTDIR/usr/share/occu/firmware"
+
+      # Install RFD binaries (prefer modern 64-bit if available)
+      if [ -d "${OCCU_ARCH}/packages-eQ-3/RFD-Beta/bin" ]; then
+        for bin in rfd multimacd crypttool SetInterfaceClock; do
+          if [ -f "${OCCU_ARCH}/packages-eQ-3/RFD-Beta/bin/${bin}" ]; then
+            install -Dm755 "${OCCU_ARCH}/packages-eQ-3/RFD-Beta/bin/${bin}" "$DESTDIR/usr/bin/${bin}"
+          fi
+        done
+      else
+        for bin in rfd multimacd crypttool SetInterfaceClock; do
+          if [ -f "${OCCU_COMMON}/packages-eQ-3/RFD/bin/${bin}" ]; then
+            install -Dm755 "${OCCU_COMMON}/packages-eQ-3/RFD/bin/${bin}" "$DESTDIR/usr/bin/${bin}"
+          fi
+        done
+      fi
+
+      # Install RFD libraries
+      if [ -d "${OCCU_ARCH}/packages-eQ-3/RFD-Beta/lib" ]; then
+        for lib in libLanDeviceUtils.so libUnifiedLanComm.so libelvutils.so libhsscomm.so; do
+          if [ -f "${OCCU_ARCH}/packages-eQ-3/RFD-Beta/lib/${lib}" ]; then
+            install -Dm755 "${OCCU_ARCH}/packages-eQ-3/RFD-Beta/lib/${lib}" "$DESTDIR/usr/lib/${lib}"
+          fi
+        done
+      fi
+
+      # Install XML libraries from WebUI-Beta (required by rfd and other binaries)
+      if [ -d "${OCCU_ARCH}/packages-eQ-3/WebUI-Beta/lib" ]; then
+        for lib in libxmlparser.so libXmlRpc.so; do
+          if [ -f "${OCCU_ARCH}/packages-eQ-3/WebUI-Beta/lib/${lib}" ]; then
+            install -Dm755 "${OCCU_ARCH}/packages-eQ-3/WebUI-Beta/lib/${lib}" "$DESTDIR/usr/lib/${lib}"
+          fi
+        done
+      fi
+
+      # Install HS485D binaries
+      if [ -d "${OCCU_ARCH}/packages-eQ-3/HS485D-Beta/bin" ]; then
+        for bin in hs485d hs485dLoader; do
+          if [ -f "${OCCU_ARCH}/packages-eQ-3/HS485D-Beta/bin/${bin}" ]; then
+            install -Dm755 "${OCCU_ARCH}/packages-eQ-3/HS485D-Beta/bin/${bin}" "$DESTDIR/usr/bin/${bin}"
+          fi
+        done
+      fi
+
+      # Install ReGaHss (WebUI binary) - prefer 64-bit from arch-specific directory
+      if [ -f "${OCCU_ARCH}/packages-eQ-3/WebUI-Beta/bin/ReGaHss" ]; then
+        install -Dm755 "${OCCU_ARCH}/packages-eQ-3/WebUI-Beta/bin/ReGaHss" "$DESTDIR/usr/bin/ReGaHss"
+      elif [ -f "${OCCU_COMMON}/packages-eQ-3/WebUI/bin/ReGaHss.community" ]; then
+        install -Dm755 "${OCCU_COMMON}/packages-eQ-3/WebUI/bin/ReGaHss.community" "$DESTDIR/usr/bin/ReGaHss"
+      fi
+
+      # Install LinuxBasis binaries (64-bit if available)
+      if [ -d "${OCCU_ARCH}/packages-eQ-3/LinuxBasis-Beta/bin" ]; then
+        for bin in eq3configcmd eq3configd hss_led ssdpd; do
+          if [ -f "${OCCU_ARCH}/packages-eQ-3/LinuxBasis-Beta/bin/${bin}" ]; then
+            install -Dm755 "${OCCU_ARCH}/packages-eQ-3/LinuxBasis-Beta/bin/${bin}" "$DESTDIR/usr/bin/${bin}"
+          fi
+        done
+      else
+        for bin in eq3configcmd eq3configd hss_led ssdpd; do
+          if [ -f "${OCCU_COMMON}/packages-eQ-3/LinuxBasis/bin/${bin}" ]; then
+            install -Dm755 "${OCCU_COMMON}/packages-eQ-3/LinuxBasis/bin/${bin}" "$DESTDIR/usr/bin/${bin}"
+          fi
+        done
+      fi
+
+      # Install LinuxBasis library
+      if [ -d "${OCCU_ARCH}/packages-eQ-3/LinuxBasis-Beta/lib" ]; then
+        if [ -f "${OCCU_ARCH}/packages-eQ-3/LinuxBasis-Beta/lib/libeq3config.so" ]; then
+          install -Dm755 "${OCCU_ARCH}/packages-eQ-3/LinuxBasis-Beta/lib/libeq3config.so" "$DESTDIR/usr/lib/libeq3config.so"
+        fi
+      fi
+
+      # Install config templates
+      if [ -f "${OCCU_COMMON}/packages-eQ-3/RFD/etc/crRFD_ccu3.conf" ]; then
+        install -Dm644 "${OCCU_COMMON}/packages-eQ-3/RFD/etc/crRFD_ccu3.conf" "$DESTDIR/etc/occu/config_templates/crRFD.conf"
+        install -Dm644 "${OCCU_COMMON}/packages-eQ-3/RFD/etc/crRFD_ccu3.conf" "$DESTDIR/etc/occu/config_templates/rfd.conf"
+      fi
+
+      # Install firmware files to a writable location (not /lib/firmware which may be read-only)
+      if [ -d "firmware" ]; then
+        cp -r firmware/* "$DESTDIR/usr/share/occu/firmware/" || true
+      fi
+
+      # Install Tcl homematic package
+      mkdir -p "$DESTDIR/usr/lib/tcl8.6"
+      if [ -d "${OCCU_COMMON}/packages-eQ-3/WebUI/lib/tcl8.2/homematic" ]; then
+        cp -r "${OCCU_COMMON}/packages-eQ-3/WebUI/lib/tcl8.2/homematic" "$DESTDIR/usr/lib/tcl8.6/"
+      fi
+
+  # Install init scripts, config, and utilities
+  - runs: |
+      DESTDIR="${{targets.destdir}}"
+
+      # Install OpenRC init scripts
+      install -Dm755 occu/occu-rfd.initd "$DESTDIR/etc/init.d/occu-rfd"
+      install -Dm644 occu/occu-rfd.confd "$DESTDIR/etc/conf.d/occu-rfd"
+      install -Dm755 occu/occu-regahss.initd "$DESTDIR/etc/init.d/occu-regahss"
+      install -Dm644 occu/occu-regahss.confd "$DESTDIR/etc/conf.d/occu-regahss"
+      install -Dm755 occu/occu-hmserver.initd "$DESTDIR/etc/init.d/occu-hmserver"
+      install -Dm644 occu/occu-hmserver.confd "$DESTDIR/etc/conf.d/occu-hmserver"
+
+      # Install RF hardware detection script
+      install -Dm755 occu/occu-detect-rf "$DESTDIR/usr/bin/occu-detect-rf"
+
+      # Install config templates
+      install -Dm644 occu/crRFD.conf.template "$DESTDIR/etc/occu/config_templates/crRFD.conf"
+      install -Dm644 occu/HMServer.conf.template "$DESTDIR/etc/occu/config_templates/HMServer.conf"
+
+      # Install udev rules
+      install -Dm644 occu/99-occu.rules "$DESTDIR/etc/udev/rules.d/99-occu.rules"
+
+      # Create symlinks for expected paths
+      mkdir -p "$DESTDIR/etc/config"
+      mkdir -p "$DESTDIR/usr/local/etc"
+      ln -sf /etc/occu/config "$DESTDIR/usr/local/etc/config"
+
+      # Create required directories
+      mkdir -p "$DESTDIR/var/lib/occu/measurement"
+      mkdir -p "$DESTDIR/etc/config/crRFD/data"
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - gcompat-custom
+  pipeline:
+    - runs: |
+        # Test that binaries exist
+        test -x /usr/bin/rfd
+        test -x /usr/bin/ReGaHss
+        test -x /usr/bin/eq3configcmd
+        test -x /usr/bin/occu-detect-rf
+
+        # Test that config templates exist
+        test -f /etc/occu/config_templates/crRFD.conf
+        test -f /etc/occu/config_templates/HMServer.conf
+
+        # Test that udev rules exist
+        test -f /etc/udev/rules.d/99-occu.rules
+
+        # Test that gcompat allows running with LD_PRELOAD (will fail without device but shows help)
+        LD_PRELOAD=/lib/libgcompat.so.0 /usr/bin/rfd --help 2>&1 || true

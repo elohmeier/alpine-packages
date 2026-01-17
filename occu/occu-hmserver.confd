@@ -1,0 +1,4 @@
+# HomeMatic IP Server (Java) configuration
+
+# User to run as (needs access to RF device)
+HMSERVER_USER="root"

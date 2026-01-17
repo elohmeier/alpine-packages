@@ -1,0 +1,11 @@
+# HMServer Configuration
+# Settings for HMIPServer Java process
+
+# Port for HMServer internal communication
+hmServerPort=9292
+
+# Port for ReGaHss communication (when available)
+regaPort=31999
+
+# Path for diagram/measurement database
+diagramDatabasePath=/var/lib/occu/measurement

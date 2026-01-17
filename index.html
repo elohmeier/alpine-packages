@@ -1,9 +1,19 @@
 <!DOCTYPE html>
 <html>
-<head><title>Alpine Packages</title></head>
+<head>
+<title>Alpine Packages</title>
+<style>
+body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+pre { background: #f4f4f4; padding: 1rem; overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #ddd; }
+th { background: #f4f4f4; }
+</style>
+</head>
 <body>
 <h1>Alpine Packages</h1>
 <p>Custom Alpine Linux APK repository.</p>
+
 <h2>Usage</h2>
 <pre>
 # Add signing key
@@ -14,8 +24,11 @@ wget -qO /etc/apk/keys/packages@elohmeier.rsa.pub \
 echo "https://elohmeier.github.io/alpine-packages" >> /etc/apk/repositories
 
 apk update
-apk search -r . # list available packages
 </pre>
+
+<h2>Available Packages</h2>
+<!-- PACKAGES_TABLE -->
+
 <p><a href="https://github.com/elohmeier/alpine-packages">Source</a></p>
 </body>
 </html>

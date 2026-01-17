@@ -1,0 +1,31 @@
+# udev rules for HomeMatic devices
+# These rules auto-detect and configure HomeMatic RF hardware
+
+# HmIP-RFUSB - HomeMatic IP USB stick (vendor 1b1f, product c020)
+# The cp210x driver doesn't know this device by default, so we add it dynamically
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1b1f", ATTR{idProduct}=="c020", \
+    RUN+="/bin/sh -c 'echo 1b1f c020 > /sys/bus/usb-serial/drivers/cp210x/new_id 2>/dev/null || true'"
+
+# Once the tty device appears, create a symlink and set permissions
+ACTION=="add", SUBSYSTEM=="tty", ATTRS{idVendor}=="1b1f", ATTRS{idProduct}=="c020", \
+    SYMLINK+="ttyHmIP-RFUSB", GROUP="dialout", MODE="0660", TAG+="systemd"
+
+# HM-MOD-RPI-PCB and RPI-RF-MOD (active via eq3_char_loop kernel module)
+# Creates /dev/mmd_bidcos for BidCos-RF and /dev/mmd_hmip for HmIP
+KERNEL=="mmd_bidcos", GROUP="dialout", MODE="0660", SYMLINK+="ttyBidCos-RF"
+KERNEL=="mmd_hmip", GROUP="dialout", MODE="0660", SYMLINK+="ttyHmIP-RF"
+
+# HM-MOD-RPI-PCB and RPI-RF-MOD via raw UART (fallback without eq3_char_loop)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="8c07", \
+    SYMLINK+="ttyRadioModule", GROUP="dialout", MODE="0660"
+
+# HM-CFG-USB-2 - HomeMatic USB configuration adapter
+SUBSYSTEM=="usb", ATTR{idVendor}=="1b1f", ATTR{idProduct}=="c00f", \
+    GROUP="dialout", MODE="0660"
+ACTION=="add", SUBSYSTEM=="tty", ATTRS{idVendor}=="1b1f", ATTRS{idProduct}=="c00f", \
+    SYMLINK+="ttyHM-CFG-USB", GROUP="dialout", MODE="0660"
+
+# Generic serial device access for RF modules
+KERNEL=="ttyACM[0-9]*", GROUP="dialout", MODE="0660"
+KERNEL=="ttyUSB[0-9]*", GROUP="dialout", MODE="0660"
+KERNEL=="ttyAMA[0-9]*", GROUP="dialout", MODE="0660"

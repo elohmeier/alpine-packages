@@ -1,0 +1,53 @@
+#!/sbin/openrc-run
+
+name="occu-regahss"
+description="HomeMatic ReGaHss Logic Engine"
+
+command="/usr/bin/ReGaHss"
+command_args="-f /etc/occu/rega.conf -l ${REGA_LOGLEVEL:-2}"
+command_background=true
+# gcompat requires LD_PRELOAD to provide fortify functions
+export LD_PRELOAD="/lib/libgcompat.so.0"
+pidfile="/run/${RC_SVCNAME}.pid"
+output_log="/var/log/${RC_SVCNAME}.log"
+error_log="/var/log/${RC_SVCNAME}.log"
+
+depend() {
+	need net
+	# occu-rfd only needed for classic BidCos-RF, not for HmIP-only setups
+	use occu-rfd lighttpd
+	after firewall
+	use logger
+}
+
+start_pre() {
+	# Source HM mode if available
+	[ -r /var/hm_mode ] && . /var/hm_mode
+
+	# Check mode
+	if [ "${HM_MODE}" != "NORMAL" ] && [ -n "${HM_MODE}" ]; then
+		eerror "System not in NORMAL mode (HM_MODE=${HM_MODE})"
+		return 1
+	fi
+
+	# Ensure required directories exist
+	checkpath --directory --mode 0755 /etc/occu/config/rc.d
+	checkpath --directory --mode 0755 /etc/occu/config/addons/www
+	checkpath --directory --mode 0755 /etc/occu/config/userprofiles
+	checkpath --directory --mode 0755 /var/tmp
+
+	# Run with restricted umask
+	umask 0027
+
+	# Adjust OOM score for important service
+	echo -900 > /proc/$$/oom_score_adj 2>/dev/null || true
+
+	return 0
+}
+
+stop_pre() {
+	# Save configuration before stopping
+	einfo "Saving ReGaHss configuration..."
+	echo "load tclrega.so; rega system.Save()" | tclsh 2>/dev/null || true
+	sync
+}

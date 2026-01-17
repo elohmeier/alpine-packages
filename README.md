@@ -17,6 +17,81 @@ echo "https://elohmeier.github.io/alpine-packages" >> /etc/apk/repositories
 apk update
 ```
 
+## Available Packages
+
+### Smart Home
+
+| Package | Description | Architectures |
+|---------|-------------|---------------|
+| **matter-server** | Open Home Foundation Matter Server - WebSocket-based Matter controller for Home Assistant | x86_64, aarch64 |
+| **chip-sdk** | Matter/CHIP SDK Python bindings | x86_64, aarch64 |
+| **otbr** | OpenThread Border Router for Thread/Matter networks | x86_64, aarch64 |
+| **occu** | eQ-3 OCCU - HomeMatic CCU core components | x86_64, aarch64 |
+| **occu-java** | eQ-3 OCCU - HomeMatic IP Server (Java) | x86_64, aarch64 |
+
+### Build Tools
+
+| Package | Description | Architectures |
+|---------|-------------|---------------|
+| **zap-cli** | ZCL Advanced Platform - code generator for Matter | x86_64, aarch64 |
+
+### 3D Printing
+
+| Package | Description | Architectures |
+|---------|-------------|---------------|
+| **prusalink** | PrusaLink for Prusa 3D printers | x86_64, aarch64, armhf |
+
+### Libraries
+
+| Package | Description | Architectures |
+|---------|-------------|---------------|
+| **gcompat-custom** | glibc compatibility layer (custom build) | x86_64, aarch64 |
+| **detect-radio-module** | HomeMatic RF module detection tool | x86_64, aarch64 |
+
+## Package Details
+
+### matter-server
+
+WebSocket-based Matter controller that integrates with Home Assistant.
+
+```sh
+apk add matter-server
+rc-service matter-server start
+rc-update add matter-server default
+```
+
+- **Port:** 5580 (WebSocket API)
+- **Config:** `/etc/conf.d/matter-server`
+- **Data:** `/var/lib/matter-server`
+
+### otbr
+
+OpenThread Border Router for Thread/Matter mesh networks.
+
+```sh
+apk add otbr
+rc-service otbr-agent start
+rc-update add otbr-agent default
+```
+
+- **Port:** 8081 (REST API)
+- **Config:** `/etc/conf.d/otbr-agent`
+- **Hardware:** Requires Thread RCP firmware (SkyConnect, Yellow, etc.)
+
+### occu / occu-java
+
+HomeMatic CCU components for HomeMatic IP devices.
+
+```sh
+apk add occu-java
+rc-service occu-hmserver start
+rc-update add occu-hmserver default
+```
+
+- **Port:** 32010 (XML-RPC API)
+- **Config:** `/etc/occu/config/`
+- **Hardware:** HmIP-RFUSB (auto-detected), RPI-RF-MOD
+
 ## Building Locally
 
 ```sh
