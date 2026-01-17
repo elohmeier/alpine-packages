@@ -1,7 +1,7 @@
 package:
   name: home-assistant
   version: 2026.1.2
-  epoch: 4
+  epoch: 5
   description: "Home Assistant Core - Open-source home automation platform"
   copyright:
     - license: Apache-2.0
@@ -180,8 +180,15 @@ pipeline:
       # Install pip in the venv (Python was built without ensurepip)
       curl -sS https://bootstrap.pypa.io/get-pip.py | python3
 
-      # Use pip for installation (more reliable for packages with C extensions)
-      # uv has path length issues with some build backends
+      # Install pyspeex-noise manually with single-threaded build
+      # (it has a race condition in its build system with parallel compilation)
+      pip download --no-cache-dir --no-binary :all: pyspeex-noise
+      tar -xzf pyspeex-noise-*.tar.gz
+      cd pyspeex-noise-*
+      python3 setup.py build_ext -j1 && pip install .
+      cd ..
+
+      # Install the rest of the packages
       pip install \
         --no-cache-dir \
         -r requirements.lock
