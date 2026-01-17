@@ -1,7 +1,7 @@
 package:
   name: python314
   version: 3.14.2
-  epoch: 1
+  epoch: 2
   description: "Python 3.14 - High-level scripting language"
   copyright:
     - license: PSF-2.0
@@ -124,11 +124,16 @@ pipeline:
       rm -rf "${{targets.destdir}}"/usr/lib/python3.14/*/test
       rm -rf "${{targets.destdir}}"/usr/lib/python3.14/*/tests
 
-      # Remove unversioned libpython3.so symlink to avoid conflict with system python3
+      # Remove unversioned symlinks to avoid conflicts with system python3
       rm -f "${{targets.destdir}}"/usr/lib/libpython3.so
+      rm -f "${{targets.destdir}}"/usr/bin/python3
+      rm -f "${{targets.destdir}}"/usr/bin/python
+      rm -f "${{targets.destdir}}"/usr/bin/python3-config
+      rm -f "${{targets.destdir}}"/usr/bin/python-config
+      rm -f "${{targets.destdir}}"/usr/bin/pydoc3
+      rm -f "${{targets.destdir}}"/usr/bin/pydoc
 
-      # Note: We don't create unversioned symlinks (python3, python, etc.)
-      # to avoid conflicts with system python3. Use python3.14 explicitly.
+      # Use python3.14 explicitly - no unversioned symlinks.
 
 test:
   environment:
