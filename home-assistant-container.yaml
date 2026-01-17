@@ -1,0 +1,93 @@
+package:
+  name: home-assistant-container
+  version: 2026.1.2
+  epoch: 0
+  description: "Home Assistant Core running in Podman container"
+  copyright:
+    - license: Apache-2.0
+  dependencies:
+    runtime:
+      - podman
+      - aardvark-dns
+      - netavark
+  target-architecture:
+    - x86_64
+    - aarch64
+  scriptlets:
+    pre-install: |
+      #!/bin/sh
+      addgroup -S homeassistant 2>/dev/null || true
+      adduser -S -D -H -h /var/lib/homeassistant -s /sbin/nologin -G homeassistant \
+        -g "Home Assistant" homeassistant 2>/dev/null || true
+      # Add to groups for hardware access
+      adduser homeassistant dialout 2>/dev/null || true
+      adduser homeassistant plugdev 2>/dev/null || true
+      adduser homeassistant gpio 2>/dev/null || true
+    post-install: |
+      #!/bin/sh
+      echo ""
+      echo "=== Home Assistant Container installed ==="
+      echo ""
+      echo "Quick start:"
+      echo "  rc-service home-assistant-container start"
+      echo "  rc-update add home-assistant-container default"
+      echo ""
+      echo "Config files:"
+      echo "  /etc/conf.d/home-assistant-container    Container options"
+      echo "  /var/lib/homeassistant                  Configuration directory"
+      echo ""
+      echo "Web interface:"
+      echo "  http://HOST:8123"
+      echo ""
+      echo "Container management:"
+      echo "  podman logs -f home-assistant"
+      echo "  podman exec -it home-assistant bash"
+      echo ""
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/edge/main
+      - https://dl-cdn.alpinelinux.org/alpine/edge/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+
+pipeline:
+  - runs: |
+      # Install OpenRC init script
+      install -Dm755 home-assistant-container/home-assistant-container.initd \
+        "${{targets.destdir}}"/etc/init.d/home-assistant-container
+
+      # Install configuration file
+      install -Dm644 home-assistant-container/home-assistant-container.confd \
+        "${{targets.destdir}}"/etc/conf.d/home-assistant-container
+
+      # Install udev rules for USB device access
+      install -Dm644 home-assistant/99-home-assistant.rules \
+        "${{targets.destdir}}"/etc/udev/rules.d/99-home-assistant.rules
+
+      # Create data directory
+      install -dm755 "${{targets.destdir}}"/var/lib/homeassistant
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/edge/main
+        - https://dl-cdn.alpinelinux.org/alpine/edge/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+  pipeline:
+    - runs: |
+        # Test init script exists and is executable
+        test -x /etc/init.d/home-assistant-container
+    - runs: |
+        # Test config file exists
+        test -f /etc/conf.d/home-assistant-container
+    - runs: |
+        # Test data directory exists
+        test -d /var/lib/homeassistant

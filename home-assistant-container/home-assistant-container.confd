@@ -1,0 +1,45 @@
+# Home Assistant Container Configuration
+
+# Container image (default: stable release)
+#HASS_IMAGE="ghcr.io/home-assistant/home-assistant:stable"
+
+# Use a specific version:
+#HASS_IMAGE="ghcr.io/home-assistant/home-assistant:2026.1.2"
+
+# Configuration directory on host
+#HASS_CONFIG="/var/lib/homeassistant"
+
+# Container name
+#HASS_CONTAINER_NAME="home-assistant"
+
+# Web UI port (uses host networking, so this is informational)
+#HASS_PORT="8123"
+
+# Timezone (should match host)
+#HASS_TIMEZONE="UTC"
+
+# Run in privileged mode (required for some integrations like Bluetooth)
+# Set to "true" if you need full hardware access
+#HASS_PRIVILEGED="false"
+
+# Extra podman options
+# Examples:
+#   Mount USB devices: --device /dev/ttyUSB0:/dev/ttyUSB0
+#   Mount additional volumes: -v /media:/media:ro
+#   Set resource limits: --memory=2g --cpus=2
+#HASS_EXTRA_OPTS=""
+
+# Common configurations:
+
+# Zigbee USB adapter (e.g., SkyConnect, ConBee):
+#HASS_EXTRA_OPTS="--device /dev/ttyUSB0:/dev/ttyUSB0"
+
+# Z-Wave USB adapter:
+#HASS_EXTRA_OPTS="--device /dev/ttyACM0:/dev/ttyACM0"
+
+# Multiple USB devices:
+#HASS_EXTRA_OPTS="--device /dev/ttyUSB0:/dev/ttyUSB0 --device /dev/ttyACM0:/dev/ttyACM0"
+
+# Bluetooth support (requires privileged mode):
+#HASS_PRIVILEGED="true"
+#HASS_EXTRA_OPTS="--device /dev/bus/usb"

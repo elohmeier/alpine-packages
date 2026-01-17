@@ -1,0 +1,60 @@
+#!/sbin/openrc-run
+
+name="home-assistant-container"
+description="Home Assistant Core (Podman container)"
+
+: ${HASS_IMAGE:="ghcr.io/home-assistant/home-assistant:stable"}
+: ${HASS_CONFIG:="/var/lib/homeassistant"}
+: ${HASS_CONTAINER_NAME:="home-assistant"}
+: ${HASS_PORT:="8123"}
+: ${HASS_TIMEZONE:="UTC"}
+: ${HASS_PRIVILEGED:="false"}
+: ${HASS_EXTRA_OPTS:=""}
+
+command="/usr/bin/podman"
+command_args="run --rm --name ${HASS_CONTAINER_NAME} \
+    -v ${HASS_CONFIG}:/config \
+    -v /run/dbus:/run/dbus:ro \
+    -e TZ=${HASS_TIMEZONE} \
+    --network=host \
+    ${HASS_PRIVILEGED:+--privileged} \
+    ${HASS_EXTRA_OPTS} \
+    ${HASS_IMAGE}"
+command_background=true
+pidfile="/run/${RC_SVCNAME}.pid"
+
+depend() {
+    need net
+    after firewall dbus
+}
+
+start_pre() {
+    # Ensure config directory exists
+    checkpath -d -m 0755 -o root:root "${HASS_CONFIG}"
+
+    # Pull image if not present
+    if ! podman image exists "${HASS_IMAGE}"; then
+        ebegin "Pulling Home Assistant image"
+        podman pull "${HASS_IMAGE}"
+        eend $?
+    fi
+
+    # Remove any existing container with the same name
+    podman rm -f "${HASS_CONTAINER_NAME}" 2>/dev/null || true
+}
+
+stop() {
+    ebegin "Stopping ${name}"
+    podman stop -t 30 "${HASS_CONTAINER_NAME}" 2>/dev/null
+    eend $?
+}
+
+status() {
+    if podman ps --format "{{.Names}}" | grep -q "^${HASS_CONTAINER_NAME}$"; then
+        einfo "Container ${HASS_CONTAINER_NAME} is running"
+        return 0
+    else
+        einfo "Container ${HASS_CONTAINER_NAME} is not running"
+        return 3
+    fi
+}
