@@ -1,0 +1,122 @@
+package:
+  name: occu-webui
+  version: 3.85.7
+  epoch: 2
+  description: "eQ-3 OCCU - HomeMatic WebUI"
+  copyright:
+    - license: HMSL
+      license-path: occu-src/LicenseDE.txt
+  dependencies:
+    runtime:
+      - lighttpd
+      - occu
+  target-architecture:
+    - aarch64
+    - x86_64
+  checks:
+    disabled:
+      - usrmerge
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+      - ca-certificates
+      - git
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/OpenCCU/occu.git
+      tag: 3.85.7-2
+      destination: occu-src
+
+  - runs: |
+      DESTDIR="${{targets.destdir}}"
+
+      # Create directories
+      mkdir -p "$DESTDIR/www"
+      mkdir -p "$DESTDIR/etc/lighttpd"
+      mkdir -p "$DESTDIR/etc/occu/config_templates"
+
+      # Copy WebUI files (use -P to not follow symlinks, -a to preserve attributes)
+      if [ -d "occu-src/WebUI/www" ]; then
+        echo "Copying WebUI files..."
+        cp -a occu-src/WebUI/www/* "$DESTDIR/www/" || true
+        # Remove any broken symlinks that might have been copied
+        find "$DESTDIR/www" -xtype l -delete 2>/dev/null || true
+      else
+        echo "WARNING: occu-src/WebUI/www not found"
+      fi
+
+      # Copy Tcl scripts
+      if [ -d "occu-src/WebUI/bin" ]; then
+        mkdir -p "$DESTDIR/usr/local/bin"
+        cp -r occu-src/WebUI/bin/* "$DESTDIR/usr/local/bin/" || true
+      fi
+
+      # Copy rega.conf template
+      if [ -f "occu-src/WebUI/etc/rega.conf" ]; then
+        install -Dm644 occu-src/WebUI/etc/rega.conf "$DESTDIR/etc/occu/rega.conf"
+        install -Dm644 occu-src/WebUI/etc/rega.conf "$DESTDIR/etc/occu/config_templates/rega.conf"
+      fi
+
+      # Set permissions for CGI files
+      find "$DESTDIR/www" -name "*.cgi" -exec chmod 755 {} \; 2>/dev/null || true
+      find "$DESTDIR/www" -name "*.ccc" -exec chmod 755 {} \; 2>/dev/null || true
+
+      # Install lighttpd configuration for OCCU
+      mkdir -p "$DESTDIR/etc/lighttpd"
+      cat > "$DESTDIR/etc/lighttpd/occu.conf" << 'EOF'
+      # OCCU WebUI lighttpd configuration
+      # Include this from /etc/lighttpd/lighttpd.conf
+
+      server.modules += (
+        "mod_cgi",
+        "mod_alias",
+        "mod_setenv"
+      )
+
+      # WebUI root
+      alias.url += ( "/" => "/www/" )
+
+      # CGI configuration for Tcl scripts
+      cgi.assign = (
+        ".cgi" => "/usr/bin/tclsh",
+        ".ccc" => "/usr/bin/tclsh",
+        ".tcl" => "/usr/bin/tclsh"
+      )
+
+      # Environment for CGI
+      setenv.add-environment = (
+        "DOCUMENT_ROOT" => "/www",
+        "QUERY_STRING_UNESCAPED" => "true"
+      )
+
+      # MIME types
+      mimetype.assign += (
+        ".tcl" => "text/plain"
+      )
+      EOF
+
+      # Ensure addons directory exists (symlink target created at runtime)
+      mkdir -p "$DESTDIR/www/addons" || true
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+  pipeline:
+    - runs: |
+        # Test that WebUI files exist
+        test -d /www
+        test -f /etc/lighttpd/occu.conf

@@ -34,6 +34,8 @@ jobs:
       build-gcompat-custom: ${{ steps.matrix.outputs.build-gcompat-custom }}
       build-occu: ${{ steps.matrix.outputs.build-occu }}
       build-occu-java: ${{ steps.matrix.outputs.build-occu-java }}
+      build-occu-webui: ${{ steps.matrix.outputs.build-occu-webui }}
+      build-pivccu-modules-dkms: ${{ steps.matrix.outputs.build-pivccu-modules-dkms }}
       any-builds: ${{ steps.matrix.outputs.any-builds }}
     steps:
       - uses: actions/checkout@v4
@@ -67,6 +69,10 @@ jobs:
               - 'occu/**'
             occu-java:
               - 'occu-java.yaml'
+            occu-webui:
+              - 'occu-webui.yaml'
+            pivccu-modules-dkms:
+              - 'pivccu-modules-dkms.yaml'
             workflow:
               - '.github/workflows/build.yaml'
 
@@ -102,7 +108,7 @@ jobs:
           }
 
           # Check each package
-          for pkg in zap-cli chip-sdk matter-server otbr prusalink detect-radio-module gcompat-custom occu occu-java; do
+          for pkg in zap-cli chip-sdk matter-server otbr prusalink detect-radio-module gcompat-custom occu occu-java occu-webui pivccu-modules-dkms; do
             yaml_ver=$(get_yaml_version "$pkg")
             published_ver=$(get_published_version "$pkg")
 
@@ -130,6 +136,8 @@ jobs:
           FILE_GCOMPAT: ${{ steps.file-changes.outputs.gcompat-custom }}
           FILE_OCCU: ${{ steps.file-changes.outputs.occu }}
           FILE_OCCU_JAVA: ${{ steps.file-changes.outputs.occu-java }}
+          FILE_OCCU_WEBUI: ${{ steps.file-changes.outputs.occu-webui }}
+          FILE_PIVCCU_DKMS: ${{ steps.file-changes.outputs.pivccu-modules-dkms }}
           FILE_WORKFLOW: ${{ steps.file-changes.outputs.workflow }}
           VERSION_ZAP: ${{ steps.version-check.outputs.zap_cli_version_changed }}
           VERSION_CHIP: ${{ steps.version-check.outputs.chip_sdk_version_changed }}
@@ -140,6 +148,8 @@ jobs:
           VERSION_GCOMPAT: ${{ steps.version-check.outputs.gcompat_custom_version_changed }}
           VERSION_OCCU: ${{ steps.version-check.outputs.occu_version_changed }}
           VERSION_OCCU_JAVA: ${{ steps.version-check.outputs.occu_java_version_changed }}
+          VERSION_OCCU_WEBUI: ${{ steps.version-check.outputs.occu_webui_version_changed }}
+          VERSION_PIVCCU_DKMS: ${{ steps.version-check.outputs.pivccu_modules_dkms_version_changed }}
           REBUILD_ALL: ${{ inputs.rebuild_all }}
         run: |
           set -e
@@ -153,6 +163,8 @@ jobs:
           build_gcompat="false"
           build_occu="false"
           build_occu_java="false"
+          build_occu_webui="false"
+          build_pivccu_dkms="false"
 
           # Workflow changes or rebuild_all triggers full rebuild
           if [[ "$FILE_WORKFLOW" == "true" ]] || [[ "$REBUILD_ALL" == "true" ]]; then
@@ -166,6 +178,8 @@ jobs:
             build_gcompat="true"
             build_occu="true"
             build_occu_java="true"
+            build_occu_webui="true"
+            build_pivccu_dkms="true"
           else
             # Check individual packages: files changed AND version differs
             if [[ "$FILE_ZAP" == "true" ]]; then
@@ -239,6 +253,22 @@ jobs:
                 echo "::warning::occu-java files changed but version not bumped - skipping build"
               fi
             fi
+
+            if [[ "$FILE_OCCU_WEBUI" == "true" ]]; then
+              if [[ "$VERSION_OCCU_WEBUI" == "true" ]]; then
+                build_occu_webui="true"
+              else
+                echo "::warning::occu-webui files changed but version not bumped - skipping build"
+              fi
+            fi
+
+            if [[ "$FILE_PIVCCU_DKMS" == "true" ]]; then
+              if [[ "$VERSION_PIVCCU_DKMS" == "true" ]]; then
+                build_pivccu_dkms="true"
+              else
+                echo "::warning::pivccu-modules-dkms files changed but version not bumped - skipping build"
+              fi
+            fi
           fi
 
           # DEPENDENCY PROPAGATION
@@ -270,6 +300,12 @@ jobs:
             build_occu_java="true"
           fi
 
+          # If occu rebuilds, occu-webui must rebuild
+          if [[ "$build_occu" == "true" && "$build_occu_webui" != "true" ]]; then
+            echo "::notice::occu-webui will rebuild due to occu dependency"
+            build_occu_webui="true"
+          fi
+
           # Output results
           echo "build-zap-cli=$build_zap" >> "$GITHUB_OUTPUT"
           echo "build-chip-sdk=$build_chip" >> "$GITHUB_OUTPUT"
@@ -280,9 +316,11 @@ jobs:
           echo "build-gcompat-custom=$build_gcompat" >> "$GITHUB_OUTPUT"
           echo "build-occu=$build_occu" >> "$GITHUB_OUTPUT"
           echo "build-occu-java=$build_occu_java" >> "$GITHUB_OUTPUT"
+          echo "build-occu-webui=$build_occu_webui" >> "$GITHUB_OUTPUT"
+          echo "build-pivccu-modules-dkms=$build_pivccu_dkms" >> "$GITHUB_OUTPUT"
 
           # Check if any builds needed
-          if [[ "$build_zap" == "true" || "$build_chip" == "true" || "$build_matter" == "true" || "$build_otbr" == "true" || "$build_prusalink" == "true" || "$build_detect_radio" == "true" || "$build_gcompat" == "true" || "$build_occu" == "true" || "$build_occu_java" == "true" ]]; then
+          if [[ "$build_zap" == "true" || "$build_chip" == "true" || "$build_matter" == "true" || "$build_otbr" == "true" || "$build_prusalink" == "true" || "$build_detect_radio" == "true" || "$build_gcompat" == "true" || "$build_occu" == "true" || "$build_occu_java" == "true" || "$build_occu_webui" == "true" || "$build_pivccu_dkms" == "true" ]]; then
             echo "any-builds=true" >> "$GITHUB_OUTPUT"
           else
             echo "any-builds=false" >> "$GITHUB_OUTPUT"
@@ -302,6 +340,8 @@ jobs:
           echo "| gcompat-custom | $build_gcompat |" >> "$GITHUB_STEP_SUMMARY"
           echo "| occu | $build_occu |" >> "$GITHUB_STEP_SUMMARY"
           echo "| occu-java | $build_occu_java |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| occu-webui | $build_occu_webui |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| pivccu-modules-dkms | $build_pivccu_dkms |" >> "$GITHUB_STEP_SUMMARY"
 
   # ===========================================
   # Phase 2: Build standalone packages (parallel)
@@ -975,11 +1015,161 @@ jobs:
           path: packages/${{ matrix.arch }}
           if-no-files-found: ignore
 
+  build-occu-webui:
+    needs: [detect-changes, build-occu]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.build-occu-webui == 'true' &&
+      (needs.build-occu.result == 'success' || needs.build-occu.result == 'skipped')
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        arch: [x86_64, aarch64]
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: chainguard-dev/actions/setup-melange@main
+        with:
+          version: latest-release
+
+      - name: Setup signing key
+        run: |
+          echo "${{ secrets.ABUILD_PRIVKEY }}" > melange.pem
+          openssl rsa -in melange.pem -out packages@elohmeier.rsa -traditional 2>/dev/null || cp melange.pem packages@elohmeier.rsa
+          openssl rsa -in packages@elohmeier.rsa -pubout -out packages@elohmeier.rsa.pub
+          chmod 600 packages@elohmeier.rsa
+          rm -f melange.pem
+
+      - name: Setup cache directory
+        run: |
+          mkdir -p cache
+          sudo chmod 777 cache
+
+      - uses: actions/cache@v4
+        with:
+          path: cache
+          key: melange-occu-webui-${{ matrix.arch }}-${{ hashFiles('occu-webui.yaml') }}
+          restore-keys: |
+            melange-occu-webui-${{ matrix.arch }}-
+
+      # Get occu from artifact (if rebuilt) or published repo (if skipped)
+      - name: Download occu artifact
+        if: needs.detect-changes.outputs.build-occu == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}-occu
+          path: packages/${{ matrix.arch }}
+
+      - name: Fetch published occu
+        if: needs.detect-changes.outputs.build-occu != 'true'
+        run: |
+          mkdir -p packages/${{ matrix.arch }}
+          curl -sL "${REPO_URL}/${{ matrix.arch }}/APKINDEX.tar.gz" | tar -xzO APKINDEX > /tmp/APKINDEX
+
+          # Fetch occu and its dependencies
+          for pkg in detect-radio-module gcompat-custom occu; do
+            pkg_version=$(awk -v p="$pkg" '/^P:/{current=substr($0,3)} current==p && /^V:/{print substr($0,3); exit}' /tmp/APKINDEX)
+            if [[ -n "$pkg_version" ]]; then
+              pkg_file="${pkg}-${pkg_version}.apk"
+              echo "Fetching published ${pkg}: $pkg_file"
+              curl -sL "${REPO_URL}/${{ matrix.arch }}/${pkg_file}" -o "packages/${{ matrix.arch }}/${pkg_file}"
+            fi
+          done
+
+      - name: Generate local repo index
+        run: |
+          if ls packages/${{ matrix.arch }}/*.apk 2>/dev/null | grep -q .; then
+            melange index \
+              --signing-key packages@elohmeier.rsa \
+              --arch ${{ matrix.arch }} \
+              -o packages/${{ matrix.arch }}/APKINDEX.tar.gz \
+              packages/${{ matrix.arch }}/*.apk
+          fi
+
+      - name: Build occu-webui
+        run: |
+          sudo melange build occu-webui.yaml \
+            --arch ${{ matrix.arch }} \
+            --signing-key packages@elohmeier.rsa \
+            --keyring-append packages@elohmeier.rsa.pub \
+            --repository-append packages/ \
+            --out-dir packages/ \
+            --cache-dir cache/ \
+            --generate-index=false
+          sudo chown -R runner:runner packages/ cache/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}-occu-webui
+          path: packages/${{ matrix.arch }}
+          if-no-files-found: ignore
+
+  build-pivccu-modules-dkms:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.build-pivccu-modules-dkms == 'true'
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        arch: [x86_64, aarch64]
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: chainguard-dev/actions/setup-melange@main
+        with:
+          version: latest-release
+
+      - name: Setup signing key
+        run: |
+          echo "${{ secrets.ABUILD_PRIVKEY }}" > melange.pem
+          openssl rsa -in melange.pem -out packages@elohmeier.rsa -traditional 2>/dev/null || cp melange.pem packages@elohmeier.rsa
+          chmod 600 packages@elohmeier.rsa
+          rm -f melange.pem
+
+      - name: Setup cache directory
+        run: |
+          mkdir -p cache
+          sudo chmod 777 cache
+
+      - uses: actions/cache@v4
+        with:
+          path: cache
+          key: melange-pivccu-modules-dkms-${{ matrix.arch }}-${{ hashFiles('pivccu-modules-dkms.yaml') }}
+          restore-keys: |
+            melange-pivccu-modules-dkms-${{ matrix.arch }}-
+
+      - name: Build pivccu-modules-dkms
+        run: |
+          sudo melange build pivccu-modules-dkms.yaml \
+            --arch ${{ matrix.arch }} \
+            --signing-key packages@elohmeier.rsa \
+            --out-dir packages/ \
+            --cache-dir cache/ \
+            --generate-index=false
+          sudo chown -R runner:runner packages/ cache/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}-pivccu-modules-dkms
+          path: packages/${{ matrix.arch }}
+          if-no-files-found: ignore
+
   # ===========================================
   # Phase 4: Publish to GitHub Pages
   # ===========================================
   publish:
-    needs: [detect-changes, build-prusalink, build-otbr, build-zap-cli, build-chip-sdk, build-matter-server, build-detect-radio-module, build-gcompat-custom, build-occu, build-occu-java]
+    needs: [detect-changes, build-prusalink, build-otbr, build-zap-cli, build-chip-sdk, build-matter-server, build-detect-radio-module, build-gcompat-custom, build-occu, build-occu-java, build-occu-webui, build-pivccu-modules-dkms]
     if: |
       always() &&
       github.ref == 'refs/heads/main' &&

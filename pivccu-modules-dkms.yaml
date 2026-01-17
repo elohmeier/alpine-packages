@@ -1,0 +1,110 @@
+package:
+  name: pivccu-modules-dkms
+  version: 0_git20250117
+  epoch: 0
+  description: "piVCCU kernel modules for HomeMatic RF hardware (DKMS)"
+  copyright:
+    - license: GPL-2.0-only
+  dependencies:
+    runtime:
+      - dkms
+      - linux-headers
+  target-architecture:
+    - aarch64
+    - x86_64
+  checks:
+    disabled:
+      - usrmerge
+  scriptlets:
+    post-install: |
+      #!/bin/sh
+      dkms add -m pivccu -v 0_git20250117 2>/dev/null || true
+      dkms build -m pivccu -v 0_git20250117 2>/dev/null || true
+      dkms install -m pivccu -v 0_git20250117 2>/dev/null || true
+      echo ""
+      echo "=== piVCCU Kernel Modules Installed ==="
+      echo "Modules: generic_raw_uart, eq3_char_loop"
+      echo ""
+      echo "To load modules:"
+      echo "  modprobe generic_raw_uart"
+      echo "  modprobe eq3_char_loop"
+      echo ""
+    pre-deinstall: |
+      #!/bin/sh
+      dkms remove -m pivccu -v 0_git20250117 --all 2>/dev/null || true
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+      - ca-certificates
+      - git
+      - patch
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/alexreinert/piVCCU.git
+      branch: master
+      expected-commit: 8be20bf4b777bdf4cd47b25f5903c2deeeb5ae4a
+
+  - runs: |
+      DESTDIR="${{targets.destdir}}"
+      VERSION="0_git20250117"
+      DKMS_DIR="$DESTDIR/usr/src/pivccu-${VERSION}"
+
+      mkdir -p "$DKMS_DIR"
+
+      # Copy kernel module sources
+      cp kernel/*.c "$DKMS_DIR/"
+      cp kernel/*.h "$DKMS_DIR/" 2>/dev/null || true
+      cp kernel/Makefile "$DKMS_DIR/"
+
+      # Create DKMS configuration
+      cat > "$DKMS_DIR/dkms.conf" << EOF
+      PACKAGE_NAME="pivccu"
+      PACKAGE_VERSION="${VERSION}"
+      AUTOINSTALL="yes"
+
+      MAKE="make KERNEL_DIR=\${kernel_source_dir}"
+      CLEAN="make clean"
+
+      BUILT_MODULE_NAME[0]="generic_raw_uart"
+      DEST_MODULE_LOCATION[0]="/kernel/drivers/pivccu"
+
+      BUILT_MODULE_NAME[1]="eq3_char_loop"
+      DEST_MODULE_LOCATION[1]="/kernel/drivers/pivccu"
+      EOF
+
+      # Apply patches for modern kernel compatibility
+      cd "$DKMS_DIR"
+
+      # Patch for Linux 6.4+ class_create() signature change
+      if grep -q "class_create.*THIS_MODULE" generic_raw_uart.c 2>/dev/null; then
+        sed -i 's/class_create(THIS_MODULE,/class_create(/g' generic_raw_uart.c
+        sed -i 's/class_create(THIS_MODULE,/class_create(/g' eq3_char_loop.c 2>/dev/null || true
+      fi
+
+      # Patch for Linux 6.12+ no_llseek -> noop_llseek
+      sed -i 's/\.llseek = no_llseek/.llseek = noop_llseek/g' *.c 2>/dev/null || true
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+  pipeline:
+    - runs: |
+        # Test that DKMS source files exist
+        test -f /usr/src/pivccu-0_git20250117/generic_raw_uart.c
+        test -f /usr/src/pivccu-0_git20250117/eq3_char_loop.c
+        test -f /usr/src/pivccu-0_git20250117/dkms.conf
+        test -f /usr/src/pivccu-0_git20250117/Makefile
