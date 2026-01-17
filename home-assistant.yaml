@@ -1,7 +1,7 @@
 package:
   name: home-assistant
   version: 2026.1.2
-  epoch: 1
+  epoch: 2
   description: "Home Assistant Core - Open-source home automation platform"
   copyright:
     - license: Apache-2.0
@@ -118,6 +118,10 @@ pipeline:
       # Voice assistant (conversation)
       hassil
       home-assistant-intents
+      pymicro-vad
+
+      # HomeAssistant hardware support (Silicon Labs firmware)
+      ha-silabs-firmware-client
 
       # Integrations: MQTT
       paho-mqtt
