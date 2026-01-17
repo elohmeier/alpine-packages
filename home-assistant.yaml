@@ -1,7 +1,7 @@
 package:
   name: home-assistant
   version: 2026.1.2
-  epoch: 5
+  epoch: 6
   description: "Home Assistant Core - Open-source home automation platform"
   copyright:
     - license: Apache-2.0
@@ -183,15 +183,18 @@ pipeline:
       # Install pyspeex-noise manually with single-threaded build
       # (it has a race condition in its build system with parallel compilation)
       pip download --no-cache-dir --no-binary :all: pyspeex-noise
-      tar -xzf pyspeex-noise-*.tar.gz
-      cd pyspeex-noise-*
-      python3 setup.py build_ext -j1 && pip install .
+      tar -xzf pyspeex_noise-*.tar.gz
+      cd pyspeex_noise-*
+      python3 setup.py build_ext -j1 && pip install --no-cache-dir .
       cd ..
+
+      # Remove pyspeex-noise from requirements.lock (already installed above)
+      grep -v '^pyspeex-noise==' requirements.lock > requirements-filtered.lock
 
       # Install the rest of the packages
       pip install \
         --no-cache-dir \
-        -r requirements.lock
+        -r requirements-filtered.lock
 
       # Compile bytecode for faster startup
       python3 -m compileall -q "${{targets.destdir}}/opt/home-assistant/lib"
