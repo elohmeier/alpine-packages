@@ -34,7 +34,7 @@ environment:
 pipeline:
   - uses: git-checkout
     with:
-      repository: https://git.adelielinux.org/adelie/gcompat.git
+      repository: https://github.com/elohmeier/gcompat.git
       branch: current
       expected-commit: f5f4486c9ff90814cc7c7cec5030b47621d135b7
       destination: gcompat-src
