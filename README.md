@@ -23,7 +23,8 @@ apk update
 
 | Package | Description | Architectures |
 |---------|-------------|---------------|
-| **home-assistant** | Home Assistant Core - open-source home automation platform | x86_64, aarch64 |
+| **home-assistant** | Home Assistant Core - native Python package | x86_64, aarch64 |
+| **home-assistant-container** | Home Assistant Core - Podman container wrapper | x86_64, aarch64 |
 | **matter-server** | Open Home Foundation Matter Server - WebSocket-based Matter controller for Home Assistant | x86_64, aarch64 |
 | **chip-sdk** | Matter/CHIP SDK Python bindings | x86_64, aarch64 |
 | **otbr** | OpenThread Border Router for Thread/Matter networks | x86_64, aarch64 |
@@ -125,6 +126,32 @@ automation: !include automations.yaml
 ```
 
 </details>
+
+### home-assistant-container
+
+Home Assistant Core running in a Podman container. This is an alternative to the native Python package that avoids musl compatibility issues.
+
+```sh
+apk add home-assistant-container
+rc-service home-assistant-container start
+rc-update add home-assistant-container default
+```
+
+- **Port:** 8123 (Web UI)
+- **Config:** `/etc/conf.d/home-assistant-container`
+- **Data:** `/var/lib/homeassistant`
+- **Image:** `ghcr.io/home-assistant/home-assistant:stable` (configurable)
+
+**USB device passthrough** (Zigbee/Z-Wave): Edit `/etc/conf.d/home-assistant-container`:
+```sh
+HASS_EXTRA_OPTS="--device /dev/ttyUSB0:/dev/ttyUSB0"
+```
+
+**Container management:**
+```sh
+podman logs -f home-assistant      # View logs
+podman exec -it home-assistant bash # Shell access
+```
 
 ### matter-server
 
