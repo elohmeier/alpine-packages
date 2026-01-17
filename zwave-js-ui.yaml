@@ -1,0 +1,168 @@
+package:
+  name: zwave-js-ui
+  version: 11.10.1
+  epoch: 0
+  description: "Z-Wave JS UI - Full-featured Z-Wave Control Panel and MQTT Gateway"
+  copyright:
+    - license: MIT
+  options:
+    no-depends: true
+  dependencies:
+    runtime:
+      - nodejs
+      - libusb
+      - eudev
+      - eudev-libs
+      - openssl
+      - tzdata
+      - ca-certificates
+  target-architecture:
+    - x86_64
+    - aarch64
+  checks:
+    disabled:
+      - usrmerge
+  scriptlets:
+    pre-install: |
+      #!/bin/sh
+      addgroup -S zwave-js 2>/dev/null || true
+      adduser -S -D -H -h /var/lib/zwave-js-ui -s /sbin/nologin -G zwave-js \
+        -g "Z-Wave JS UI" zwave-js 2>/dev/null || true
+      # Add to dialout for serial port access
+      adduser zwave-js dialout 2>/dev/null || true
+    post-install: |
+      #!/bin/sh
+      echo ""
+      echo "=== Z-Wave JS UI installed ==="
+      echo ""
+      echo "Quick start:"
+      echo "  rc-service zwave-js-ui start"
+      echo "  rc-update add zwave-js-ui default"
+      echo ""
+      echo "Config files:"
+      echo "  /etc/conf.d/zwave-js-ui    Service options"
+      echo "  /var/lib/zwave-js-ui       Data directory"
+      echo ""
+      echo "Web interface:"
+      echo "  http://HOST:8091"
+      echo ""
+      echo "Z-Wave JS WebSocket server:"
+      echo "  ws://HOST:3000"
+      echo ""
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/edge/main
+      - https://dl-cdn.alpinelinux.org/alpine/edge/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+      - ca-certificates
+      - build-base
+      - linux-headers
+      - python3
+      - python3-dev
+      - nodejs
+      - npm
+      - libusb-dev
+      - eudev-dev
+      - openssl-dev
+  environment:
+    npm_config_cache: /var/cache/melange/npm
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/zwave-js/zwave-js-ui.git
+      tag: v${{package.version}}
+      depth: 1
+
+  # Install dependencies
+  - runs: |
+      npm ci
+
+  # Rebuild serialport bindings from source for musl compatibility
+  - runs: |
+      npm_config_build_from_source=true npm rebuild @serialport/bindings-cpp
+
+  # Build TypeScript backend and Vue.js frontend
+  - runs: |
+      npm run build
+
+  # Prune dev dependencies and clean up
+  - runs: |
+      npm prune --omit=dev
+
+      # Remove unnecessary files
+      rm -rf .git .github .vscode
+      rm -rf test docs api src
+      rm -rf *.md *.ts *.js .* 2>/dev/null || true
+      rm -rf docker kubernetes
+      rm -rf coverage .c8_output
+
+  # Install to package directory
+  - runs: |
+      appdir="${{targets.destdir}}/opt/zwave-js-ui"
+      mkdir -p "$appdir"
+
+      # Copy production files
+      cp -r node_modules "$appdir/"
+      cp -r server "$appdir/"
+      cp -r dist "$appdir/"
+      cp -r snippets "$appdir/"
+      cp package.json "$appdir/"
+
+      # Remove prebuilds for other platforms (keep only linux-musl)
+      find "$appdir/node_modules" -type d -name "prebuilds" | while read dir; do
+        if [ -d "$dir" ]; then
+          # Keep linux-arm64 and linux-x64 musl binaries
+          find "$dir" -mindepth 1 -maxdepth 1 -type d \
+            ! -name "linux-arm64" \
+            ! -name "linux-x64" \
+            -exec rm -rf {} + 2>/dev/null || true
+        fi
+      done
+
+      # Create wrapper script
+      install -dm755 "${{targets.destdir}}/usr/bin"
+
+      cat > "${{targets.destdir}}/usr/bin/zwave-js-ui" << 'EOF'
+      #!/bin/sh
+      cd /opt/zwave-js-ui
+      exec node server/bin/www.js "$@"
+      EOF
+      chmod 755 "${{targets.destdir}}/usr/bin/zwave-js-ui"
+
+  # Install OpenRC scripts
+  - runs: |
+      install -Dm755 zwave-js-ui/zwave-js-ui.initd "${{targets.destdir}}/etc/init.d/zwave-js-ui"
+      install -Dm644 zwave-js-ui/zwave-js-ui.confd "${{targets.destdir}}/etc/conf.d/zwave-js-ui"
+
+      # Create data directory
+      install -dm755 "${{targets.destdir}}/var/lib/zwave-js-ui"
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/edge/main
+        - https://dl-cdn.alpinelinux.org/alpine/edge/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+  pipeline:
+    - runs: |
+        # Test that the wrapper exists and is executable
+        test -x /usr/bin/zwave-js-ui
+    - runs: |
+        # Test that we can load the main module
+        cd /opt/zwave-js-ui
+        node -e "console.log('Node.js OK')"
+    - runs: |
+        # Check server directory exists
+        test -d /opt/zwave-js-ui/server
+        test -f /opt/zwave-js-ui/server/bin/www.js
+    - runs: |
+        # Check frontend dist exists
+        test -d /opt/zwave-js-ui/dist

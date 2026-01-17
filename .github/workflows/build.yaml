@@ -37,6 +37,7 @@ jobs:
       build-occu-webui: ${{ steps.matrix.outputs.build-occu-webui }}
       build-pivccu-modules-dkms: ${{ steps.matrix.outputs.build-pivccu-modules-dkms }}
       build-home-assistant: ${{ steps.matrix.outputs.build-home-assistant }}
+      build-zwave-js-ui: ${{ steps.matrix.outputs.build-zwave-js-ui }}
       any-builds: ${{ steps.matrix.outputs.any-builds }}
     steps:
       - uses: actions/checkout@v4
@@ -77,6 +78,9 @@ jobs:
             home-assistant:
               - 'home-assistant.yaml'
               - 'home-assistant/**'
+            zwave-js-ui:
+              - 'zwave-js-ui.yaml'
+              - 'zwave-js-ui/**'
             workflow:
               - '.github/workflows/build.yaml'
 
@@ -112,7 +116,7 @@ jobs:
           }
 
           # Check each package
-          for pkg in zap-cli chip-sdk matter-server otbr prusalink detect-radio-module gcompat-custom occu occu-java occu-webui pivccu-modules-dkms home-assistant; do
+          for pkg in zap-cli chip-sdk matter-server otbr prusalink detect-radio-module gcompat-custom occu occu-java occu-webui pivccu-modules-dkms home-assistant zwave-js-ui; do
             yaml_ver=$(get_yaml_version "$pkg")
             published_ver=$(get_published_version "$pkg")
 
@@ -143,6 +147,7 @@ jobs:
           FILE_OCCU_WEBUI: ${{ steps.file-changes.outputs.occu-webui }}
           FILE_PIVCCU_DKMS: ${{ steps.file-changes.outputs.pivccu-modules-dkms }}
           FILE_HOME_ASSISTANT: ${{ steps.file-changes.outputs.home-assistant }}
+          FILE_ZWAVE_JS_UI: ${{ steps.file-changes.outputs.zwave-js-ui }}
           FILE_WORKFLOW: ${{ steps.file-changes.outputs.workflow }}
           VERSION_ZAP: ${{ steps.version-check.outputs.zap_cli_version_changed }}
           VERSION_CHIP: ${{ steps.version-check.outputs.chip_sdk_version_changed }}
@@ -156,6 +161,7 @@ jobs:
           VERSION_OCCU_WEBUI: ${{ steps.version-check.outputs.occu_webui_version_changed }}
           VERSION_PIVCCU_DKMS: ${{ steps.version-check.outputs.pivccu_modules_dkms_version_changed }}
           VERSION_HOME_ASSISTANT: ${{ steps.version-check.outputs.home_assistant_version_changed }}
+          VERSION_ZWAVE_JS_UI: ${{ steps.version-check.outputs.zwave_js_ui_version_changed }}
           REBUILD_ALL: ${{ inputs.rebuild_all }}
         run: |
           set -e
@@ -172,6 +178,7 @@ jobs:
           build_occu_webui="false"
           build_pivccu_dkms="false"
           build_home_assistant="false"
+          build_zwave_js_ui="false"
 
           # Workflow changes or rebuild_all triggers full rebuild
           if [[ "$FILE_WORKFLOW" == "true" ]] || [[ "$REBUILD_ALL" == "true" ]]; then
@@ -188,6 +195,7 @@ jobs:
             build_occu_webui="true"
             build_pivccu_dkms="true"
             build_home_assistant="true"
+            build_zwave_js_ui="true"
           else
             # Check individual packages: files changed AND version differs
             if [[ "$FILE_ZAP" == "true" ]]; then
@@ -285,6 +293,14 @@ jobs:
                 echo "::warning::home-assistant files changed but version not bumped - skipping build"
               fi
             fi
+
+            if [[ "$FILE_ZWAVE_JS_UI" == "true" ]]; then
+              if [[ "$VERSION_ZWAVE_JS_UI" == "true" ]]; then
+                build_zwave_js_ui="true"
+              else
+                echo "::warning::zwave-js-ui files changed but version not bumped - skipping build"
+              fi
+            fi
           fi
 
           # DEPENDENCY PROPAGATION
@@ -335,9 +351,10 @@ jobs:
           echo "build-occu-webui=$build_occu_webui" >> "$GITHUB_OUTPUT"
           echo "build-pivccu-modules-dkms=$build_pivccu_dkms" >> "$GITHUB_OUTPUT"
           echo "build-home-assistant=$build_home_assistant" >> "$GITHUB_OUTPUT"
+          echo "build-zwave-js-ui=$build_zwave_js_ui" >> "$GITHUB_OUTPUT"
 
           # Check if any builds needed
-          if [[ "$build_zap" == "true" || "$build_chip" == "true" || "$build_matter" == "true" || "$build_otbr" == "true" || "$build_prusalink" == "true" || "$build_detect_radio" == "true" || "$build_gcompat" == "true" || "$build_occu" == "true" || "$build_occu_java" == "true" || "$build_occu_webui" == "true" || "$build_pivccu_dkms" == "true" || "$build_home_assistant" == "true" ]]; then
+          if [[ "$build_zap" == "true" || "$build_chip" == "true" || "$build_matter" == "true" || "$build_otbr" == "true" || "$build_prusalink" == "true" || "$build_detect_radio" == "true" || "$build_gcompat" == "true" || "$build_occu" == "true" || "$build_occu_java" == "true" || "$build_occu_webui" == "true" || "$build_pivccu_dkms" == "true" || "$build_home_assistant" == "true" || "$build_zwave_js_ui" == "true" ]]; then
             echo "any-builds=true" >> "$GITHUB_OUTPUT"
           else
             echo "any-builds=false" >> "$GITHUB_OUTPUT"
@@ -360,6 +377,7 @@ jobs:
           echo "| occu-webui | $build_occu_webui |" >> "$GITHUB_STEP_SUMMARY"
           echo "| pivccu-modules-dkms | $build_pivccu_dkms |" >> "$GITHUB_STEP_SUMMARY"
           echo "| home-assistant | $build_home_assistant |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| zwave-js-ui | $build_zwave_js_ui |" >> "$GITHUB_STEP_SUMMARY"
 
   # ===========================================
   # Phase 2: Build standalone packages (parallel)
@@ -1238,11 +1256,66 @@ jobs:
           path: packages/${{ matrix.arch }}
           if-no-files-found: ignore
 
+  build-zwave-js-ui:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.build-zwave-js-ui == 'true'
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        arch: [x86_64, aarch64]
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: chainguard-dev/actions/setup-melange@main
+        with:
+          version: latest-release
+
+      - name: Setup signing key
+        run: |
+          echo "${{ secrets.ABUILD_PRIVKEY }}" > melange.pem
+          openssl rsa -in melange.pem -out packages@elohmeier.rsa -traditional 2>/dev/null || cp melange.pem packages@elohmeier.rsa
+          chmod 600 packages@elohmeier.rsa
+          rm -f melange.pem
+
+      - name: Setup cache directory
+        run: |
+          mkdir -p cache
+          sudo chmod 777 cache
+
+      - uses: actions/cache@v4
+        with:
+          path: cache
+          key: melange-zwave-js-ui-${{ matrix.arch }}-${{ hashFiles('zwave-js-ui.yaml') }}
+          restore-keys: |
+            melange-zwave-js-ui-${{ matrix.arch }}-
+
+      - name: Build zwave-js-ui
+        run: |
+          sudo melange build zwave-js-ui.yaml \
+            --arch ${{ matrix.arch }} \
+            --signing-key packages@elohmeier.rsa \
+            --out-dir packages/ \
+            --cache-dir cache/ \
+            --generate-index=false
+          sudo chown -R runner:runner packages/ cache/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}-zwave-js-ui
+          path: packages/${{ matrix.arch }}
+          if-no-files-found: ignore
+
   # ===========================================
   # Phase 4: Publish to GitHub Pages
   # ===========================================
   publish:
-    needs: [detect-changes, build-prusalink, build-otbr, build-zap-cli, build-chip-sdk, build-matter-server, build-detect-radio-module, build-gcompat-custom, build-occu, build-occu-java, build-occu-webui, build-pivccu-modules-dkms, build-home-assistant]
+    needs: [detect-changes, build-prusalink, build-otbr, build-zap-cli, build-chip-sdk, build-matter-server, build-detect-radio-module, build-gcompat-custom, build-occu, build-occu-java, build-occu-webui, build-pivccu-modules-dkms, build-home-assistant, build-zwave-js-ui]
     if: |
       always() &&
       github.ref == 'refs/heads/main' &&

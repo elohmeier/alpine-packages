@@ -1,0 +1,22 @@
+# Z-Wave JS UI configuration
+
+# User to run as
+ZUI_USER="zwave-js"
+
+# Data/store directory
+ZUI_STORE_DIR="/var/lib/zwave-js-ui"
+
+# Web UI port (default: 8091)
+ZUI_PORT="8091"
+
+# Bind address (default: 0.0.0.0)
+ZUI_HOST="0.0.0.0"
+
+# Uncomment to enable HTTPS
+# export HTTPS="true"
+
+# Uncomment to set session secret (recommended for production)
+# export SESSION_SECRET="your-secret-here"
+
+# Z-Wave JS WebSocket server is available at ws://HOST:3000
+# Configure this URL in Home Assistant Z-Wave JS integration

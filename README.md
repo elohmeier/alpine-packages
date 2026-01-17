@@ -29,6 +29,7 @@ apk update
 | **otbr** | OpenThread Border Router for Thread/Matter networks | x86_64, aarch64 |
 | **occu** | eQ-3 OCCU - HomeMatic CCU core components | x86_64, aarch64 |
 | **occu-java** | eQ-3 OCCU - HomeMatic IP Server (Java) | x86_64, aarch64 |
+| **zwave-js-ui** | Z-Wave JS UI - Z-Wave Control Panel and MQTT Gateway | x86_64, aarch64 |
 
 ### Build Tools
 
@@ -107,6 +108,23 @@ rc-update add occu-hmserver default
 - **Port:** 32010 (XML-RPC API)
 - **Config:** `/etc/occu/config/`
 - **Hardware:** HmIP-RFUSB (auto-detected), RPI-RF-MOD
+
+### zwave-js-ui
+
+Z-Wave JS UI - Full-featured Z-Wave Control Panel and MQTT Gateway.
+
+```sh
+apk add zwave-js-ui
+rc-service zwave-js-ui start
+rc-update add zwave-js-ui default
+```
+
+- **Port:** 8091 (Web UI), 3000 (Z-Wave JS WebSocket)
+- **Config:** `/etc/conf.d/zwave-js-ui`
+- **Data:** `/var/lib/zwave-js-ui`
+- **Hardware:** Z-Wave USB sticks (Aeotec, Zooz, etc.)
+
+Configure Home Assistant Z-Wave JS integration to connect to `ws://HOST:3000`.
 
 ## Building Locally
 
