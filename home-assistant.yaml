@@ -1,7 +1,7 @@
 package:
   name: home-assistant
   version: 2026.1.2
-  epoch: 6
+  epoch: 7
   description: "Home Assistant Core - Open-source home automation platform"
   copyright:
     - license: Apache-2.0
@@ -180,13 +180,64 @@ pipeline:
       # Install pip in the venv (Python was built without ensurepip)
       curl -sS https://bootstrap.pypa.io/get-pip.py | python3
 
-      # Install pyspeex-noise manually with single-threaded build
-      # (it has a race condition in its build system with parallel compilation)
-      pip download --no-cache-dir --no-binary :all: pyspeex-noise
-      tar -xzf pyspeex_noise-*.tar.gz
-      cd pyspeex_noise-*
-      python3 setup.py build_ext -j1 && pip install --no-cache-dir .
-      cd ..
+      # Install build dependencies for pyspeex-noise
+      pip install --no-cache-dir setuptools wheel pybind11
+
+      # Install pyspeex-noise from GitHub (PyPI tarball is missing src/speex_noise.cpp)
+      SPEEX_SRC=/home/build/pyspeex-noise
+      curl -sL https://github.com/rhasspy/pyspeex-noise/archive/refs/tags/v2.0.0.tar.gz | tar -xz -C /home/build
+      mv /home/build/pyspeex-noise-2.0.0 "$SPEEX_SRC"
+
+      # Compile each source file individually to avoid race condition
+      g++ -fno-strict-overflow -Wsign-compare -DNDEBUG -g -O3 -Wall -fPIC \
+        -DPy_LIMITED_API=0x03090000 -DVERSION_INFO=\"2.0.0\" \
+        -I"$SPEEX_SRC/speex" -I"${{targets.destdir}}/opt/home-assistant/include" -I/usr/include/python3.14 \
+        -DFLOATING_POINT -DUSE_KISS_FFT \
+        -c "$SPEEX_SRC/speex/fftwrap.cc" -o /home/build/fftwrap.o
+      g++ -fno-strict-overflow -Wsign-compare -DNDEBUG -g -O3 -Wall -fPIC \
+        -DPy_LIMITED_API=0x03090000 -DVERSION_INFO=\"2.0.0\" \
+        -I"$SPEEX_SRC/speex" -I"${{targets.destdir}}/opt/home-assistant/include" -I/usr/include/python3.14 \
+        -DFLOATING_POINT -DUSE_KISS_FFT \
+        -c "$SPEEX_SRC/speex/filterbank.cc" -o /home/build/filterbank.o
+      g++ -fno-strict-overflow -Wsign-compare -DNDEBUG -g -O3 -Wall -fPIC \
+        -DPy_LIMITED_API=0x03090000 -DVERSION_INFO=\"2.0.0\" \
+        -I"$SPEEX_SRC/speex" -I"${{targets.destdir}}/opt/home-assistant/include" -I/usr/include/python3.14 \
+        -DFLOATING_POINT -DUSE_KISS_FFT \
+        -c "$SPEEX_SRC/speex/kiss_fft.cc" -o /home/build/kiss_fft.o
+      g++ -fno-strict-overflow -Wsign-compare -DNDEBUG -g -O3 -Wall -fPIC \
+        -DPy_LIMITED_API=0x03090000 -DVERSION_INFO=\"2.0.0\" \
+        -I"$SPEEX_SRC/speex" -I"${{targets.destdir}}/opt/home-assistant/include" -I/usr/include/python3.14 \
+        -DFLOATING_POINT -DUSE_KISS_FFT \
+        -c "$SPEEX_SRC/speex/kiss_fftr.cc" -o /home/build/kiss_fftr.o
+      g++ -fno-strict-overflow -Wsign-compare -DNDEBUG -g -O3 -Wall -fPIC \
+        -DPy_LIMITED_API=0x03090000 -DVERSION_INFO=\"2.0.0\" \
+        -I"$SPEEX_SRC/speex" -I"${{targets.destdir}}/opt/home-assistant/include" -I/usr/include/python3.14 \
+        -DFLOATING_POINT -DUSE_KISS_FFT \
+        -c "$SPEEX_SRC/speex/mdf.cc" -o /home/build/mdf.o
+      g++ -fno-strict-overflow -Wsign-compare -DNDEBUG -g -O3 -Wall -fPIC \
+        -DPy_LIMITED_API=0x03090000 -DVERSION_INFO=\"2.0.0\" \
+        -I"$SPEEX_SRC/speex" -I"${{targets.destdir}}/opt/home-assistant/include" -I/usr/include/python3.14 \
+        -DFLOATING_POINT -DUSE_KISS_FFT \
+        -c "$SPEEX_SRC/speex/preprocess.cc" -o /home/build/preprocess.o
+      g++ -fno-strict-overflow -Wsign-compare -DNDEBUG -g -O3 -Wall -fPIC \
+        -DPy_LIMITED_API=0x03090000 -DVERSION_INFO=\"2.0.0\" \
+        -I"$SPEEX_SRC/speex" -I"${{targets.destdir}}/opt/home-assistant/include" -I/usr/include/python3.14 \
+        -DFLOATING_POINT -DUSE_KISS_FFT \
+        -c "$SPEEX_SRC/src/speex_noise.cpp" -o /home/build/speex_noise.o
+
+      # Link into shared library
+      g++ -shared /home/build/fftwrap.o /home/build/filterbank.o /home/build/kiss_fft.o \
+        /home/build/kiss_fftr.o /home/build/mdf.o /home/build/preprocess.o /home/build/speex_noise.o \
+        -o /home/build/speex_noise_cpp.abi3.so
+
+      # Install the Python package with pre-built extension
+      # speex_noise_cpp.abi3.so goes in site-packages root (imported as top-level module)
+      mkdir -p "${{targets.destdir}}/opt/home-assistant/lib/python3.14/site-packages/pyspeex_noise"
+      cp "$SPEEX_SRC/pyspeex_noise/"*.py "${{targets.destdir}}/opt/home-assistant/lib/python3.14/site-packages/pyspeex_noise/"
+      cp /home/build/speex_noise_cpp.abi3.so "${{targets.destdir}}/opt/home-assistant/lib/python3.14/site-packages/"
+
+      # Verify pyspeex-noise was installed correctly
+      python3 -c "import pyspeex_noise; print('pyspeex_noise OK')"
 
       # Remove pyspeex-noise from requirements.lock (already installed above)
       grep -v '^pyspeex-noise==' requirements.lock > requirements-filtered.lock
@@ -251,3 +302,12 @@ test:
     - runs: |
         # Test help output
         hass --help
+    - runs: |
+        # Test critical modules that block the web UI if missing
+        /opt/home-assistant/bin/python3 -c "import pyspeex_noise; print('pyspeex_noise OK')"
+        /opt/home-assistant/bin/python3 -c "import pymicro_vad; print('pymicro_vad OK')"
+        /opt/home-assistant/bin/python3 -c "import av; print('av (PyAV) OK')"
+        # Test assist_pipeline can be imported (requires pyspeex_noise + pymicro_vad)
+        /opt/home-assistant/bin/python3 -c "from homeassistant.components.assist_pipeline import pipeline; print('assist_pipeline OK')"
+        # Test stream component can be imported (requires av)
+        /opt/home-assistant/bin/python3 -c "from homeassistant.components import stream; print('stream OK')"
