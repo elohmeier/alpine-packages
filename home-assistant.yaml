@@ -1,7 +1,7 @@
 package:
   name: home-assistant
   version: 2026.1.2
-  epoch: 3
+  epoch: 4
   description: "Home Assistant Core - Open-source home automation platform"
   copyright:
     - license: Apache-2.0
@@ -86,6 +86,7 @@ environment:
       - rust
       - cargo
       - linux-headers
+      - curl
   environment:
     PIP_CACHE_DIR: /var/cache/melange/pip
     CARGO_HOME: /var/cache/melange/cargo
@@ -173,13 +174,20 @@ pipeline:
       # Create venv in the target location
       python3.14 -m venv "${{targets.destdir}}/opt/home-assistant"
 
-      # Activate and install using uv (much faster than pip)
+      # Activate venv
       . "${{targets.destdir}}/opt/home-assistant/bin/activate"
 
-      uv pip install \
-        --no-cache \
-        --compile-bytecode \
+      # Install pip in the venv (Python was built without ensurepip)
+      curl -sS https://bootstrap.pypa.io/get-pip.py | python3
+
+      # Use pip for installation (more reliable for packages with C extensions)
+      # uv has path length issues with some build backends
+      pip install \
+        --no-cache-dir \
         -r requirements.lock
+
+      # Compile bytecode for faster startup
+      python3 -m compileall -q "${{targets.destdir}}/opt/home-assistant/lib"
 
       # Fix permissions on venv lock file
       chmod 644 "${{targets.destdir}}/opt/home-assistant/.lock" || true
