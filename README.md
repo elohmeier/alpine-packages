@@ -23,6 +23,7 @@ apk update
 
 | Package | Description | Architectures |
 |---------|-------------|---------------|
+| **home-assistant** | Home Assistant Core - open-source home automation platform | x86_64, aarch64 |
 | **matter-server** | Open Home Foundation Matter Server - WebSocket-based Matter controller for Home Assistant | x86_64, aarch64 |
 | **chip-sdk** | Matter/CHIP SDK Python bindings | x86_64, aarch64 |
 | **otbr** | OpenThread Border Router for Thread/Matter networks | x86_64, aarch64 |
@@ -49,6 +50,21 @@ apk update
 | **detect-radio-module** | HomeMatic RF module detection tool | x86_64, aarch64 |
 
 ## Package Details
+
+### home-assistant
+
+Home Assistant Core - open-source home automation platform with bundled integrations.
+
+```sh
+apk add home-assistant
+rc-service home-assistant start
+rc-update add home-assistant default
+```
+
+- **Port:** 8123 (Web UI)
+- **Config:** `/etc/conf.d/home-assistant`
+- **Data:** `/var/lib/homeassistant`
+- **Integrations:** MQTT, ZHA (Zigbee), Z-Wave JS, ESPHome, HomeKit
 
 ### matter-server
 

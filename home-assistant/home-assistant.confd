@@ -1,0 +1,17 @@
+# Home Assistant configuration
+
+# User to run as
+HASS_USER="homeassistant"
+
+# Configuration directory
+HASS_CONFIG="/var/lib/homeassistant"
+
+# Additional options (see: hass --help)
+# --skip-pip is recommended for package installations to prevent runtime installs
+HASS_OPTS="--skip-pip"
+
+# Uncomment to enable verbose logging
+# HASS_OPTS="--skip-pip --verbose"
+
+# Uncomment to allow runtime pip installs (requires build-base on the system)
+# HASS_OPTS=""
