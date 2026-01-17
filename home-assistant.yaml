@@ -1,7 +1,7 @@
 package:
   name: home-assistant
   version: 2026.1.2
-  epoch: 0
+  epoch: 1
   description: "Home Assistant Core - Open-source home automation platform"
   copyright:
     - license: Apache-2.0
@@ -13,6 +13,7 @@ package:
       - python314
       - libjpeg-turbo
       - libturbojpeg
+      - ffmpeg
       - ffmpeg-libs
       - eudev
       - eudev-libs
@@ -102,15 +103,21 @@ pipeline:
 
       # USB device detection
       pyudev
+      aiousbwatcher
+
+      # Network discovery
+      async-upnp-client
+      aiodhcpwatcher
 
       # Core dependencies that need to be pre-built (have C extensions)
       ha-ffmpeg
 
-      # Network discovery
-      async-upnp-client
+      # Audio/media metadata
+      mutagen
 
-      # Note: Voice assistant packages excluded - build issues on musl
-      # pymicro-vad, pyspeex-noise, hassil, aiodiscover (netifaces)
+      # Voice assistant (conversation)
+      hassil
+      home-assistant-intents
 
       # Integrations: MQTT
       paho-mqtt
