@@ -1,7 +1,7 @@
 package:
   name: universal-silabs-flasher
   version: 0.1.3
-  epoch: 0
+  epoch: 1
   description: "Flash Silicon Labs radios running EmberZNet, CPC, or Gecko Bootloader firmware"
   copyright:
     - license: GPL-3.0-only
@@ -10,6 +10,12 @@ package:
   dependencies:
     runtime:
       - python3
+      - py3-aiohttp
+      # click 8.2.0+ required (Alpine has 8.1.x) - bundled
+      - py3-coloredlogs
+      - py3-async-timeout
+      - py3-typing-extensions
+      - py3-cryptography
   target-architecture:
     - x86_64
     - aarch64
@@ -31,7 +37,13 @@ environment:
       - py3-pip
       - py3-setuptools
       - py3-wheel
-      - git
+      # System packages for dependencies (not bundled)
+      - py3-aiohttp
+      # py3-click excluded - need 8.2.0+, Alpine has 8.1.x
+      - py3-coloredlogs
+      - py3-async-timeout
+      - py3-typing-extensions
+      - py3-cryptography
   environment:
     PIP_CACHE_DIR: /var/cache/melange/pip
 
@@ -41,23 +53,32 @@ pipeline:
       sitepkgs="${{targets.destdir}}/usr/lib/python$pyver/site-packages"
       mkdir -p "$sitepkgs"
 
-      # Download and build all wheels
+      # Only download packages not available in Alpine
+      # zigpy, bellows, crc, gpiod, pyserial-asyncio-fast are not in Alpine repos
+      # click 8.2.0+ required (Alpine has 8.1.x)
       python3 -m pip wheel \
         --wheel-dir .dist \
         "universal-silabs-flasher==${{package.version}}" \
-        "aiohttp" \
         "click>=8.2.0" \
         "zigpy>=0.70.0" \
         "crc" \
         "bellows>=0.42.0" \
         "gpiod" \
-        "coloredlogs" \
-        "async-timeout" \
-        "typing_extensions" \
         "pyserial-asyncio-fast"
 
-      # Install all wheels
+      # Install wheels, skipping packages provided by Alpine
       for whl in .dist/*.whl; do
+        case "$(basename "$whl")" in
+          aiohttp-*|coloredlogs-*|async_timeout-*|typing_extensions-*|cryptography-*)
+            echo "Skipping $whl (provided by Alpine)"
+            continue
+            ;;
+          # Skip transitive dependencies also provided by Alpine
+          attrs-*|yarl-*|multidict-*|frozenlist-*|charset_normalizer-*|cffi-*|pycparser-*|idna-*|aiohappyeyeballs-*|propcache-*|humanfriendly-*)
+            echo "Skipping $whl (provided by Alpine)"
+            continue
+            ;;
+        esac
         python3 -m pip install \
           --no-deps \
           --no-compile \

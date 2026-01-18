@@ -1,7 +1,7 @@
 package:
   name: matter-server
   version: 8.1.2
-  epoch: 11
+  epoch: 12
   description: "Open Home Foundation Matter Server - WebSocket-based Matter controller"
   copyright:
     - license: Apache-2.0
@@ -12,6 +12,17 @@ package:
     runtime:
       - chip-sdk
       - python3
+      - py3-aiohttp
+      - py3-coloredlogs
+      - py3-orjson
+      - py3-cryptography
+      - py3-zeroconf
+      - py3-atomicwrites
+      - py3-yaml
+      - py3-construct
+      - py3-dacite
+      - py3-rich
+      - py3-ecdsa
   target-architecture:
     - x86_64
     - aarch64
@@ -66,6 +77,18 @@ environment:
       - py3-setuptools
       - py3-wheel
       - chip-sdk
+      # System packages for dependencies (not bundled)
+      - py3-aiohttp
+      - py3-coloredlogs
+      - py3-orjson
+      - py3-cryptography
+      - py3-zeroconf
+      - py3-atomicwrites
+      - py3-yaml
+      - py3-construct
+      - py3-dacite
+      - py3-rich
+      - py3-ecdsa
   environment:
     PIP_CACHE_DIR: /var/cache/melange/pip
 
@@ -76,27 +99,30 @@ pipeline:
       sitepkgs="${{targets.destdir}}/usr/lib/python$pyver/site-packages"
       mkdir -p "$sitepkgs"
 
-      # Download and install python-matter-server and dependencies
+      # Download python-matter-server and aiorun (not in Alpine)
       python3 -m pip wheel \
         --wheel-dir .dist \
         "python-matter-server==${{package.version}}" \
-        "aiohttp>=3.9.0" \
-        "aiorun>=2024.5.1" \
-        "coloredlogs>=15.0" \
-        "orjson>=3.9.0" \
-        "cryptography>=42.0.0" \
-        "zeroconf>=0.131.0" \
-        "atomicwrites>=1.4.0" \
-        "pyyaml>=6.0" \
-        "construct>=2.10" \
-        "dacite>=1.8" \
-        "rich>=13.0" \
-        "ecdsa>=0.18"
+        "aiorun>=2024.5.1"
 
-      # Install all wheels (skip CHIP packages - provided by chip-sdk)
+      # Install wheels, skipping packages provided by Alpine or chip-sdk
       for whl in .dist/*.whl; do
-        case "$whl" in
-          *home_assistant_chip*) echo "Skipping $whl (provided by chip-sdk)"; continue ;;
+        case "$(basename "$whl")" in
+          # Skip CHIP packages (provided by chip-sdk)
+          home_assistant_chip*)
+            echo "Skipping $whl (provided by chip-sdk)"
+            continue
+            ;;
+          # Skip packages provided by Alpine
+          aiohttp-*|coloredlogs-*|orjson-*|cryptography-*|zeroconf-*|atomicwrites-*|PyYAML-*|construct-*|dacite-*|rich-*|ecdsa-*)
+            echo "Skipping $whl (provided by Alpine)"
+            continue
+            ;;
+          # Skip transitive dependencies also provided by Alpine
+          attrs-*|yarl-*|multidict-*|frozenlist-*|charset_normalizer-*|cffi-*|pycparser-*|idna-*|aiohappyeyeballs-*|propcache-*|humanfriendly-*|ifaddr-*|markdown_it_py-*|mdurl-*|pygments-*|typing_extensions-*|async_timeout-*|six-*)
+            echo "Skipping $whl (provided by Alpine)"
+            continue
+            ;;
         esac
         python3 -m pip install \
           --no-deps \
