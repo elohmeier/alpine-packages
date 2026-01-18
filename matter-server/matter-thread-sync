@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+"""Sync Thread credentials from OTBR to matter-server."""
+
+import asyncio
+import json
+import subprocess
+import sys
+
+
+async def sync_thread_credentials(host: str = "localhost", port: int = 5580, timeout: int = 30) -> int:
+    """Get Thread dataset from OTBR and send to matter-server."""
+    # Check if ot-ctl is available
+    try:
+        result = subprocess.run(
+            ["ot-ctl", "dataset", "active", "-x"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode != 0:
+            print("OTBR not ready or no active dataset", file=sys.stderr)
+            return 1
+
+        dataset_hex = result.stdout.strip().split("\n")[0]
+        if not dataset_hex or dataset_hex == "Done" or len(dataset_hex) < 10:
+            print("No active Thread dataset in OTBR", file=sys.stderr)
+            return 1
+
+    except FileNotFoundError:
+        print("ot-ctl not found - OTBR not installed", file=sys.stderr)
+        return 0  # Not an error, just no OTBR
+    except subprocess.TimeoutExpired:
+        print("Timeout getting Thread dataset from OTBR", file=sys.stderr)
+        return 1
+
+    # Connect to matter-server and set Thread credentials
+    try:
+        import aiohttp
+    except ImportError:
+        print("aiohttp not available", file=sys.stderr)
+        return 1
+
+    url = f"ws://{host}:{port}/ws"
+
+    # Retry connection with backoff
+    for attempt in range(timeout // 2):
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.ws_connect(url, timeout=5) as ws:
+                    # Get initial state
+                    msg = await asyncio.wait_for(ws.receive(), timeout=5)
+                    if isinstance(msg.data, bytes):
+                        state = json.loads(msg.data[2:].decode())
+                    else:
+                        state = json.loads(msg.data)
+
+                    # Check if already set
+                    if state.get("thread_credentials_set"):
+                        print("Thread credentials already set in matter-server")
+                        return 0
+
+                    # Send set_thread_dataset command
+                    await ws.send_json({
+                        "message_id": "thread-sync",
+                        "command": "set_thread_dataset",
+                        "args": {"dataset": dataset_hex}
+                    })
+
+                    # Wait for result
+                    msg = await asyncio.wait_for(ws.receive(), timeout=10)
+                    if isinstance(msg.data, bytes):
+                        result = json.loads(msg.data[2:].decode())
+                    else:
+                        result = json.loads(msg.data)
+
+                    if "error_code" in result:
+                        print(f"Error setting Thread credentials: {result.get('details', result)}", file=sys.stderr)
+                        return 1
+
+                    print("Thread credentials synced from OTBR to matter-server")
+                    return 0
+
+        except (aiohttp.ClientError, asyncio.TimeoutError, ConnectionRefusedError, OSError):
+            if attempt < (timeout // 2) - 1:
+                await asyncio.sleep(2)
+                continue
+            print(f"Could not connect to matter-server at {url}", file=sys.stderr)
+            return 1
+
+    return 1
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Sync Thread credentials from OTBR to matter-server")
+    parser.add_argument("--host", default="localhost", help="Matter server host")
+    parser.add_argument("--port", type=int, default=5580, help="Matter server port")
+    parser.add_argument("--timeout", type=int, default=30, help="Connection timeout in seconds")
+
+    args = parser.parse_args()
+    sys.exit(asyncio.run(sync_thread_credentials(args.host, args.port, args.timeout)))
+
+
+if __name__ == "__main__":
+    main()

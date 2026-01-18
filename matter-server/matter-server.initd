@@ -13,7 +13,7 @@ error_log="/var/log/${RC_SVCNAME}.log"
 
 depend() {
 	need net
-	after firewall avahi-daemon
+	after firewall avahi-daemon otbr-agent
 }
 
 start_pre() {
@@ -34,5 +34,14 @@ start_pre() {
 	if [ ! -d /proc/sys/net/ipv6 ]; then
 		eerror "IPv6 is required for Matter but appears to be disabled"
 		return 1
+	fi
+}
+
+start_post() {
+	# Sync Thread credentials from OTBR if available
+	# Run in background to not block service startup
+	if command -v matter-thread-sync >/dev/null 2>&1; then
+		einfo "Syncing Thread credentials from OTBR (background)..."
+		matter-thread-sync --timeout 60 >/dev/null 2>&1 &
 	fi
 }
