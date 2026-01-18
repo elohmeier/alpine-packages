@@ -1,10 +1,20 @@
 #!/bin/sh
 # Setup script for diskless Home Assistant
 # Pulls container image and creates squashfs on SD card
+#
+# Usage:
+#   setup-home-assistant-image           # Initial setup (fails if exists)
+#   setup-home-assistant-image --upgrade # Upgrade existing installation
 
 set -e
 
 : ${HASS_IMAGE:="ghcr.io/home-assistant/home-assistant:@VERSION@"}
+
+# Parse arguments
+UPGRADE_MODE=false
+if [ "$1" = "--upgrade" ] || [ "$1" = "-u" ]; then
+    UPGRADE_MODE=true
+fi
 
 # Find SD card mount point
 find_sd_mount() {
@@ -38,14 +48,24 @@ echo "Target: $SQUASHFS_PATH"
 
 # Check if squashfs already exists
 if [ -f "$SQUASHFS_PATH" ]; then
-    echo "Image already exists at $SQUASHFS_PATH"
-    echo "Remove it first to re-pull: rm $SQUASHFS_PATH"
-    exit 0
+    if [ "$UPGRADE_MODE" = "true" ]; then
+        echo "Upgrade mode: replacing existing image..."
+        # Stop services before unmounting
+        rc-service home-assistant-container stop 2>/dev/null || true
+        rc-service home-assistant-rostore stop 2>/dev/null || true
+        # Remount and delete old squashfs
+        mount -o remount,rw "$SD_MOUNT"
+        rm -f "$SQUASHFS_PATH"
+    else
+        echo "Image already exists at $SQUASHFS_PATH"
+        echo "Use --upgrade to replace with new version"
+        exit 0
+    fi
+else
+    # Remount SD card read-write for fresh install
+    echo "Remounting $SD_MOUNT read-write..."
+    mount -o remount,rw "$SD_MOUNT"
 fi
-
-# Remount SD card read-write
-echo "Remounting $SD_MOUNT read-write..."
-mount -o remount,rw "$SD_MOUNT"
 
 # Create temp ext4 image for Podman storage (FAT32 doesn't support overlay)
 echo "Creating temporary storage image..."
@@ -85,6 +105,14 @@ mount -o remount,ro "$SD_MOUNT"
 echo ""
 echo "=== Done ==="
 echo "Image saved to: $SQUASHFS_PATH"
-echo "Start services:"
-echo "  rc-service home-assistant-rostore start"
-echo "  rc-service home-assistant-container start"
+
+# Restart services if upgrade mode
+if [ "$UPGRADE_MODE" = "true" ]; then
+    echo "Restarting services..."
+    rc-service home-assistant-rostore start
+    rc-service home-assistant-container start
+else
+    echo "Start services:"
+    echo "  rc-service home-assistant-rostore start"
+    echo "  rc-service home-assistant-container start"
+fi
