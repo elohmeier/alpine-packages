@@ -30,6 +30,7 @@ apk update
 | **occu** | eQ-3 OCCU - HomeMatic CCU core components | x86_64, aarch64 |
 | **occu-java** | eQ-3 OCCU - HomeMatic IP Server (Java) | x86_64, aarch64 |
 | **zwave-js-ui** | Z-Wave JS UI - Z-Wave Control Panel and MQTT Gateway | x86_64, aarch64 |
+| **universal-silabs-flasher** | Flash Silicon Labs radios (EmberZNet, CPC, Gecko Bootloader) | x86_64, aarch64 |
 
 ### Build Tools
 
