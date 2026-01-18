@@ -1,7 +1,7 @@
 package:
   name: otbr
   version: 0.3.0
-  epoch: 3
+  epoch: 4
   description: "OpenThread Border Router"
   copyright:
     - license: BSD-3-Clause
@@ -46,8 +46,8 @@ package:
       echo ""
       echo "Hardware:"
       echo "  Requires Thread RCP firmware on radio (e.g., SkyConnect, Yellow)"
-      echo "  Set OTBR_AGENT_OPTS in /etc/conf.d/otbr-agent with radio URL"
-      echo "  Example: OTBR_AGENT_OPTS='-I wpan0 -B eth0 spinel+hdlc+uart:///dev/ttyUSB0'"
+      echo "  Backbone interface is auto-detected (eth0/wlan0)"
+      echo "  Radio device defaults to /dev/ttyACM0"
       echo ""
 
 environment:

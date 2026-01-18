@@ -14,7 +14,39 @@ depend() {
 	after firewall
 }
 
+_detect_infra_if() {
+	# Auto-detect backbone interface: prefer eth*, then wlan*, then any other
+	local iface
+	for iface in /sys/class/net/eth* /sys/class/net/en* /sys/class/net/wlan* /sys/class/net/*; do
+		[ -d "$iface" ] || continue
+		iface=$(basename "$iface")
+		# Skip loopback, Thread interface, and virtual interfaces
+		case "$iface" in
+			lo|wpan*|docker*|veth*|br-*|tun*) continue ;;
+		esac
+		# Check if interface is UP and has an IPv4 address
+		if ip link show "$iface" 2>/dev/null | grep -q "state UP" && \
+		   ip -4 addr show "$iface" 2>/dev/null | grep -q "inet "; then
+			echo "$iface"
+			return 0
+		fi
+	done
+	return 1
+}
+
 start_pre() {
+	# Auto-detect backbone interface if set to "auto"
+	if [ "$OTBR_INFRA_IF" = "auto" ]; then
+		OTBR_INFRA_IF=$(_detect_infra_if) || {
+			eerror "Could not auto-detect backbone interface"
+			eerror "Set OTBR_INFRA_IF in /etc/conf.d/otbr-agent"
+			return 1
+		}
+		einfo "Auto-detected backbone interface: $OTBR_INFRA_IF"
+		# Rebuild command args with detected interface
+		command_args="-I $OTBR_THREAD_IF -B $OTBR_INFRA_IF --rest-listen-address $OTBR_REST_ADDR --rest-listen-port $OTBR_REST_PORT spinel+hdlc+uart://$OTBR_RADIO_DEVICE"
+	fi
+
 	# Load TUN module if not already loaded
 	if [ ! -e /dev/net/tun ]; then
 		modprobe tun || {

@@ -10,7 +10,8 @@ OTBR_RADIO_DEVICE="/dev/ttyACM0"
 OTBR_THREAD_IF="wpan0"
 
 # Infrastructure/backbone interface (Wi-Fi or Ethernet)
-OTBR_INFRA_IF="eth0"
+# Set to "auto" to auto-detect, or specify interface name (e.g., eth0, wlan0)
+OTBR_INFRA_IF="auto"
 
 # REST API settings (used by Home Assistant Thread integration)
 OTBR_REST_ADDR="::"
