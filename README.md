@@ -49,6 +49,12 @@ apk update
 |---------|-------------|---------------|
 | **python314** | Python 3.14 - High-level scripting language with PGO/LTO optimizations | x86_64, aarch64 |
 
+### Utilities
+
+| Package | Description | Architectures |
+|---------|-------------|---------------|
+| **ssh-to-age** | Convert SSH Ed25519 keys to age keys | x86_64, aarch64 |
+
 ### Libraries
 
 | Package | Description | Architectures |

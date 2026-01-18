@@ -39,6 +39,7 @@ jobs:
       build-home-assistant-container: ${{ steps.matrix.outputs.build-home-assistant-container }}
       build-zwave-js-ui: ${{ steps.matrix.outputs.build-zwave-js-ui }}
       build-python314: ${{ steps.matrix.outputs.build-python314 }}
+      build-ssh-to-age: ${{ steps.matrix.outputs.build-ssh-to-age }}
       any-builds: ${{ steps.matrix.outputs.any-builds }}
     steps:
       - uses: actions/checkout@v4
@@ -86,6 +87,8 @@ jobs:
             python314:
               - 'python314.yaml'
               - 'python314/**'
+            ssh-to-age:
+              - 'ssh-to-age.yaml'
             workflow:
               - '.github/workflows/build.yaml'
 
@@ -121,7 +124,7 @@ jobs:
           }
 
           # Check each package
-          for pkg in zap-cli chip-sdk matter-server otbr prusalink detect-radio-module gcompat-custom occu occu-java occu-webui pivccu-modules-dkms home-assistant-container zwave-js-ui python314; do
+          for pkg in zap-cli chip-sdk matter-server otbr prusalink detect-radio-module gcompat-custom occu occu-java occu-webui pivccu-modules-dkms home-assistant-container zwave-js-ui python314 ssh-to-age; do
             yaml_ver=$(get_yaml_version "$pkg")
             published_ver=$(get_published_version "$pkg")
 
@@ -154,6 +157,7 @@ jobs:
           FILE_HOME_ASSISTANT_CONTAINER: ${{ steps.file-changes.outputs.home-assistant-container }}
           FILE_ZWAVE_JS_UI: ${{ steps.file-changes.outputs.zwave-js-ui }}
           FILE_PYTHON314: ${{ steps.file-changes.outputs.python314 }}
+          FILE_SSH_TO_AGE: ${{ steps.file-changes.outputs.ssh-to-age }}
           FILE_WORKFLOW: ${{ steps.file-changes.outputs.workflow }}
           VERSION_ZAP: ${{ steps.version-check.outputs.zap_cli_version_changed }}
           VERSION_CHIP: ${{ steps.version-check.outputs.chip_sdk_version_changed }}
@@ -169,6 +173,7 @@ jobs:
           VERSION_HOME_ASSISTANT_CONTAINER: ${{ steps.version-check.outputs.home_assistant_container_version_changed }}
           VERSION_ZWAVE_JS_UI: ${{ steps.version-check.outputs.zwave_js_ui_version_changed }}
           VERSION_PYTHON314: ${{ steps.version-check.outputs.python314_version_changed }}
+          VERSION_SSH_TO_AGE: ${{ steps.version-check.outputs.ssh_to_age_version_changed }}
           REBUILD_ALL: ${{ inputs.rebuild_all }}
         run: |
           set -e
@@ -187,6 +192,7 @@ jobs:
           build_home_assistant_container="false"
           build_zwave_js_ui="false"
           build_python314="false"
+          build_ssh_to_age="false"
 
           # Workflow changes or rebuild_all triggers full rebuild
           if [[ "$FILE_WORKFLOW" == "true" ]] || [[ "$REBUILD_ALL" == "true" ]]; then
@@ -205,6 +211,7 @@ jobs:
             build_home_assistant_container="true"
             build_zwave_js_ui="true"
             build_python314="true"
+            build_ssh_to_age="true"
           else
             # Check individual packages: files changed AND version differs
             if [[ "$FILE_ZAP" == "true" ]]; then
@@ -318,6 +325,14 @@ jobs:
                 echo "::warning::python314 files changed but version not bumped - skipping build"
               fi
             fi
+
+            if [[ "$FILE_SSH_TO_AGE" == "true" ]]; then
+              if [[ "$VERSION_SSH_TO_AGE" == "true" ]]; then
+                build_ssh_to_age="true"
+              else
+                echo "::warning::ssh-to-age files changed but version not bumped - skipping build"
+              fi
+            fi
           fi
 
           # DEPENDENCY PROPAGATION
@@ -370,9 +385,10 @@ jobs:
           echo "build-home-assistant-container=$build_home_assistant_container" >> "$GITHUB_OUTPUT"
           echo "build-zwave-js-ui=$build_zwave_js_ui" >> "$GITHUB_OUTPUT"
           echo "build-python314=$build_python314" >> "$GITHUB_OUTPUT"
+          echo "build-ssh-to-age=$build_ssh_to_age" >> "$GITHUB_OUTPUT"
 
           # Check if any builds needed
-          if [[ "$build_zap" == "true" || "$build_chip" == "true" || "$build_matter" == "true" || "$build_otbr" == "true" || "$build_prusalink" == "true" || "$build_detect_radio" == "true" || "$build_gcompat" == "true" || "$build_occu" == "true" || "$build_occu_java" == "true" || "$build_occu_webui" == "true" || "$build_pivccu_dkms" == "true" || "$build_home_assistant_container" == "true" || "$build_zwave_js_ui" == "true" || "$build_python314" == "true" ]]; then
+          if [[ "$build_zap" == "true" || "$build_chip" == "true" || "$build_matter" == "true" || "$build_otbr" == "true" || "$build_prusalink" == "true" || "$build_detect_radio" == "true" || "$build_gcompat" == "true" || "$build_occu" == "true" || "$build_occu_java" == "true" || "$build_occu_webui" == "true" || "$build_pivccu_dkms" == "true" || "$build_home_assistant_container" == "true" || "$build_zwave_js_ui" == "true" || "$build_python314" == "true" || "$build_ssh_to_age" == "true" ]]; then
             echo "any-builds=true" >> "$GITHUB_OUTPUT"
           else
             echo "any-builds=false" >> "$GITHUB_OUTPUT"
@@ -397,6 +413,7 @@ jobs:
           echo "| home-assistant-container | $build_home_assistant_container |" >> "$GITHUB_STEP_SUMMARY"
           echo "| zwave-js-ui | $build_zwave_js_ui |" >> "$GITHUB_STEP_SUMMARY"
           echo "| python314 | $build_python314 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| ssh-to-age | $build_ssh_to_age |" >> "$GITHUB_STEP_SUMMARY"
 
   # ===========================================
   # Phase 2: Build standalone packages (parallel)
@@ -1372,11 +1389,66 @@ jobs:
           path: packages/${{ matrix.arch }}
           if-no-files-found: ignore
 
+  build-ssh-to-age:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.build-ssh-to-age == 'true'
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        arch: [x86_64, aarch64]
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: chainguard-dev/actions/setup-melange@main
+        with:
+          version: latest-release
+
+      - name: Setup signing key
+        run: |
+          echo "${{ secrets.ABUILD_PRIVKEY }}" > melange.pem
+          openssl rsa -in melange.pem -out packages@elohmeier.rsa -traditional 2>/dev/null || cp melange.pem packages@elohmeier.rsa
+          chmod 600 packages@elohmeier.rsa
+          rm -f melange.pem
+
+      - name: Setup cache directory
+        run: |
+          mkdir -p cache
+          sudo chmod 777 cache
+
+      - uses: actions/cache@v4
+        with:
+          path: cache
+          key: melange-ssh-to-age-${{ matrix.arch }}-${{ hashFiles('ssh-to-age.yaml') }}
+          restore-keys: |
+            melange-ssh-to-age-${{ matrix.arch }}-
+
+      - name: Build ssh-to-age
+        run: |
+          sudo melange build ssh-to-age.yaml \
+            --arch ${{ matrix.arch }} \
+            --signing-key packages@elohmeier.rsa \
+            --out-dir packages/ \
+            --cache-dir cache/ \
+            --generate-index=false
+          sudo chown -R runner:runner packages/ cache/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}-ssh-to-age
+          path: packages/${{ matrix.arch }}
+          if-no-files-found: ignore
+
   # ===========================================
   # Phase 4: Publish to GitHub Pages
   # ===========================================
   publish:
-    needs: [detect-changes, build-prusalink, build-home-assistant-container, build-otbr, build-zap-cli, build-chip-sdk, build-matter-server, build-detect-radio-module, build-gcompat-custom, build-occu, build-occu-java, build-occu-webui, build-pivccu-modules-dkms, build-zwave-js-ui, build-python314]
+    needs: [detect-changes, build-prusalink, build-home-assistant-container, build-otbr, build-zap-cli, build-chip-sdk, build-matter-server, build-detect-radio-module, build-gcompat-custom, build-occu, build-occu-java, build-occu-webui, build-pivccu-modules-dkms, build-zwave-js-ui, build-python314, build-ssh-to-age]
     if: |
       always() &&
       github.ref == 'refs/heads/main' &&

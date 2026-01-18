@@ -1,0 +1,56 @@
+package:
+  name: ssh-to-age
+  version: "1.3.0"
+  epoch: 0
+  description: "Convert SSH Ed25519 keys to age keys"
+  copyright:
+    - license: MIT
+  target-architecture:
+    - aarch64
+    - x86_64
+  checks:
+    disabled:
+      - usrmerge
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+      - ca-certificates
+      - go
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/elohmeier/ssh-to-age.git
+      tag: ${{package.version}}
+      expected-commit: a67cab26ee2ff3fa4299cace370feb50ec779a64
+
+  - runs: |
+      go build -trimpath -ldflags="-s -w" -o ssh-to-age ./cmd/ssh-to-age/
+      install -Dm755 ssh-to-age "${{targets.destdir}}"/usr/bin/ssh-to-age
+
+  - uses: strip
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+  pipeline:
+    - runs: |
+        # Test that binary exists and shows help
+        ssh-to-age -h || true
+
+        # Test public key conversion
+        echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMrrp50OLTbNWAjnlNVN3pwBHDC5LR0K7BPfB6GVenOD test@test" | ssh-to-age
