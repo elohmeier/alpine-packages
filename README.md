@@ -23,8 +23,7 @@ apk update
 
 | Package | Description | Architectures |
 |---------|-------------|---------------|
-| **home-assistant** | Home Assistant Core - native Python package | x86_64, aarch64 |
-| **home-assistant-container** | Home Assistant Core - Podman container wrapper | x86_64, aarch64 |
+| **home-assistant-container** | Home Assistant Core - Podman container | x86_64, aarch64 |
 | **matter-server** | Open Home Foundation Matter Server - WebSocket-based Matter controller for Home Assistant | x86_64, aarch64 |
 | **chip-sdk** | Matter/CHIP SDK Python bindings | x86_64, aarch64 |
 | **otbr** | OpenThread Border Router for Thread/Matter networks | x86_64, aarch64 |
@@ -59,77 +58,9 @@ apk update
 
 ## Package Details
 
-### home-assistant
-
-Home Assistant Core - open-source home automation platform with bundled integrations.
-
-```sh
-apk add home-assistant
-rc-service home-assistant start
-rc-update add home-assistant default
-```
-
-- **Port:** 8123 (Web UI)
-- **Config:** `/etc/conf.d/home-assistant`
-- **Data:** `/var/lib/homeassistant`
-- **Integrations:** MQTT, ZHA (Zigbee), Z-Wave JS, ESPHome, HomeKit
-
-**Alpine/musl limitation:** The `dhcp` component requires `netifaces` which doesn't compile on musl libc. Replace `default_config:` in your `configuration.yaml` with individual components:
-
-<details>
-<summary>Click to expand configuration.yaml example</summary>
-
-```yaml
-# Individual components (excluding dhcp for Alpine compatibility)
-assist_pipeline:
-backup:
-bluetooth:
-cloud:
-config:
-conversation:
-counter:
-energy:
-frontend:
-hardware:
-history:
-homeassistant_alerts:
-image_upload:
-input_boolean:
-input_button:
-input_datetime:
-input_number:
-input_select:
-input_text:
-logbook:
-logger:
-map:
-media_source:
-mobile_app:
-my:
-network:
-person:
-schedule:
-scene:
-script: !include scripts.yaml
-ssdp:
-stream:
-sun:
-system_health:
-tag:
-timer:
-usb:
-webhook:
-zeroconf:
-zone:
-
-automation: !include automations.yaml
-```
-
-</details>
-
 ### home-assistant-container
 
-Home Assistant Core running in a Podman container. This is an alternative to the native Python package that avoids musl compatibility issues.
+Home Assistant Core running in a Podman container.
 
 ```sh
 apk add home-assistant-container
@@ -152,6 +83,38 @@ HASS_EXTRA_OPTS="--device /dev/ttyUSB0:/dev/ttyUSB0"
 podman logs -f home-assistant      # View logs
 podman exec -it home-assistant bash # Shell access
 ```
+
+**Diskless setup (Alpine running from RAM):**
+
+For diskless Alpine systems, the setup script pulls the container image and creates a squashfs on the SD card:
+
+```sh
+# 1. Install the package
+apk add home-assistant-container
+
+# 2. Setup container image (requires network, creates squashfs on SD card)
+setup-home-assistant-image
+
+# 3. Start services
+rc-service home-assistant-rostore start
+rc-service home-assistant-container start
+rc-update add home-assistant-rostore boot
+rc-update add home-assistant-container default
+
+# 4. Persist with lbu
+lbu commit
+```
+
+The setup script:
+- Temporarily remounts SD card read-write
+- Pulls the Home Assistant container image
+- Creates a compressed squashfs on the SD card (~400MB)
+- Remounts SD card read-only
+
+Requirements:
+- Network access during setup
+- ~2GB temporary space for image pull
+- SD card with ~500MB free space
 
 ### matter-server
 
@@ -222,7 +185,7 @@ apk add python314
 
 - **Binary:** `/usr/bin/python3.14`
 - **Features:** PGO, LTO, zstd compression (stdlib), shared library
-- **Note:** Used as a build dependency for home-assistant package
+- **Note:** Available for projects requiring Python 3.14
 
 ## Building Locally
 

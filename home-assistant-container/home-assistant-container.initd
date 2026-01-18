@@ -11,36 +11,54 @@ description="Home Assistant Core (Podman container)"
 : ${HASS_PRIVILEGED:="false"}
 : ${HASS_EXTRA_OPTS:=""}
 
-command="/usr/bin/podman"
-command_args="run --rm --name ${HASS_CONTAINER_NAME} \
-    -v ${HASS_CONFIG}:/config \
-    -v /run/dbus:/run/dbus:ro \
-    -e TZ=${HASS_TIMEZONE} \
-    --network=host \
-    ${HASS_PRIVILEGED:+--privileged} \
-    ${HASS_EXTRA_OPTS} \
-    ${HASS_IMAGE}"
-command_background=true
-pidfile="/run/${RC_SVCNAME}.pid"
-
 depend() {
-    need net
-    after firewall dbus
+    need net cgroups dbus
+    after firewall home-assistant-rostore
 }
 
 start_pre() {
-    # Ensure config directory exists
     checkpath -d -m 0755 -o root:root "${HASS_CONFIG}"
 
-    # Pull image if not present
-    if ! podman image exists "${HASS_IMAGE}"; then
-        ebegin "Pulling Home Assistant image"
-        podman pull "${HASS_IMAGE}"
-        eend $?
-    fi
+    # Wait for podman to be ready (may take a moment after boot)
+    local i=0
+    while ! podman info >/dev/null 2>&1; do
+        i=$((i + 1))
+        if [ $i -ge 30 ]; then
+            eerror "Timeout waiting for podman to be ready"
+            return 1
+        fi
+        sleep 1
+    done
 
-    # Remove any existing container with the same name
+    # Wait for image to be available (rostore may still be mounting)
+    i=0
+    while ! podman image exists "${HASS_IMAGE}" 2>/dev/null; do
+        i=$((i + 1))
+        if [ $i -ge 60 ]; then
+            # Image not found after waiting, try to pull it
+            ebegin "Pulling Home Assistant image"
+            podman pull "${HASS_IMAGE}"
+            eend $? || return 1
+            break
+        fi
+        sleep 1
+    done
+
+    # Remove any existing container
     podman rm -f "${HASS_CONTAINER_NAME}" 2>/dev/null || true
+}
+
+start() {
+    ebegin "Starting ${name}"
+    podman run -d --rm --name "${HASS_CONTAINER_NAME}" \
+        -v "${HASS_CONFIG}:/config" \
+        -v /run/dbus:/run/dbus:ro \
+        -e "TZ=${HASS_TIMEZONE}" \
+        --network=host \
+        ${HASS_PRIVILEGED:+--privileged} \
+        ${HASS_EXTRA_OPTS} \
+        "${HASS_IMAGE}" >/dev/null 2>&1
+    eend $?
 }
 
 stop() {

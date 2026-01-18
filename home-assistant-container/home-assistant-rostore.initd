@@ -1,0 +1,56 @@
+#!/sbin/openrc-run
+
+name="home-assistant-rostore"
+description="Mount Home Assistant container image from SD card"
+
+: ${ROSTORE_MOUNT:="/var/lib/containers/rostore"}
+
+depend() {
+    before home-assistant-container
+    after localmount
+}
+
+_find_squashfs() {
+    local sqfs
+    for dir in /media/mmcblk0p1 /media/sda1 /media/usb; do
+        sqfs="$dir/home-assistant-image.squashfs"
+        [ -f "$sqfs" ] && echo "$sqfs" && return 0
+    done
+    return 1
+}
+
+start() {
+    local sqfs_file
+
+    sqfs_file=$(_find_squashfs)
+    if [ -z "$sqfs_file" ]; then
+        eerror "No squashfs image found on SD card"
+        eerror "Run: setup-home-assistant-image"
+        return 1
+    fi
+
+    ebegin "Mounting container image from $sqfs_file"
+
+    mkdir -p "$ROSTORE_MOUNT"
+    mount -t squashfs -o ro,loop "$sqfs_file" "$ROSTORE_MOUNT"
+    eend $? || return 1
+
+    # Configure Podman to use rostore
+    mkdir -p /etc/containers
+    cat > /etc/containers/storage.conf << EOF
+[storage]
+driver = "overlay"
+graphroot = "/var/lib/containers/storage"
+runroot = "/run/containers/storage"
+
+[storage.options]
+additionalimagestores = ["$ROSTORE_MOUNT"]
+EOF
+}
+
+stop() {
+    ebegin "Unmounting container image store"
+    umount "$ROSTORE_MOUNT" 2>/dev/null
+    rm -f /etc/containers/storage.conf
+    eend 0
+}

@@ -1,9 +1,10 @@
 # Home Assistant Container Configuration
 
-# Container image (default: stable release)
+# Container image (default: stable)
+# The setup-home-assistant-image script pulls "stable" by default
 #HASS_IMAGE="ghcr.io/home-assistant/home-assistant:stable"
 
-# Use a specific version:
+# Use specific version:
 #HASS_IMAGE="ghcr.io/home-assistant/home-assistant:2026.1.2"
 
 # Configuration directory on host

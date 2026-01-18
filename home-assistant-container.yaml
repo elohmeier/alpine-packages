@@ -1,7 +1,7 @@
 package:
   name: home-assistant-container
   version: 2026.1.2
-  epoch: 0
+  epoch: 3
   description: "Home Assistant Core running in Podman container"
   copyright:
     - license: Apache-2.0
@@ -10,6 +10,7 @@ package:
       - podman
       - aardvark-dns
       - netavark
+      - squashfs-tools
   target-architecture:
     - x86_64
     - aarch64
@@ -43,6 +44,11 @@ package:
       echo "  podman logs -f home-assistant"
       echo "  podman exec -it home-assistant bash"
       echo ""
+      echo "Diskless systems (Alpine running from RAM):"
+      echo "  setup-home-assistant-image"
+      echo "  rc-service home-assistant-rostore start"
+      echo "  rc-service home-assistant-container start"
+      echo ""
 
 environment:
   contents:
@@ -56,17 +62,23 @@ environment:
 
 pipeline:
   - runs: |
-      # Install OpenRC init script
+      # Install OpenRC init scripts
       install -Dm755 home-assistant-container/home-assistant-container.initd \
         "${{targets.destdir}}"/etc/init.d/home-assistant-container
+      install -Dm755 home-assistant-container/home-assistant-rostore.initd \
+        "${{targets.destdir}}"/etc/init.d/home-assistant-rostore
 
       # Install configuration file
       install -Dm644 home-assistant-container/home-assistant-container.confd \
         "${{targets.destdir}}"/etc/conf.d/home-assistant-container
 
       # Install udev rules for USB device access
-      install -Dm644 home-assistant/99-home-assistant.rules \
+      install -Dm644 home-assistant-container/99-home-assistant.rules \
         "${{targets.destdir}}"/etc/udev/rules.d/99-home-assistant.rules
+
+      # Install setup script for diskless systems
+      install -Dm755 home-assistant-container/setup-home-assistant-image.sh \
+        "${{targets.destdir}}"/usr/bin/setup-home-assistant-image
 
       # Create data directory
       install -dm755 "${{targets.destdir}}"/var/lib/homeassistant
@@ -83,8 +95,9 @@ test:
         - busybox
   pipeline:
     - runs: |
-        # Test init script exists and is executable
+        # Test init scripts exist and are executable
         test -x /etc/init.d/home-assistant-container
+        test -x /etc/init.d/home-assistant-rostore
     - runs: |
         # Test config file exists
         test -f /etc/conf.d/home-assistant-container
