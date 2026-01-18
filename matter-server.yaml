@@ -1,7 +1,7 @@
 package:
   name: matter-server
   version: 8.1.2
-  epoch: 12
+  epoch: 13
   description: "Open Home Foundation Matter Server - WebSocket-based Matter controller"
   copyright:
     - license: Apache-2.0
@@ -119,7 +119,7 @@ pipeline:
             continue
             ;;
           # Skip transitive dependencies also provided by Alpine
-          attrs-*|yarl-*|multidict-*|frozenlist-*|charset_normalizer-*|cffi-*|pycparser-*|idna-*|aiohappyeyeballs-*|propcache-*|humanfriendly-*|ifaddr-*|markdown_it_py-*|mdurl-*|pygments-*|typing_extensions-*|async_timeout-*|six-*)
+          aiosignal-*|attrs-*|yarl-*|multidict-*|frozenlist-*|charset_normalizer-*|cffi-*|pycparser-*|idna-*|aiohappyeyeballs-*|propcache-*|humanfriendly-*|ifaddr-*|markdown_it_py-*|mdurl-*|pygments-*|typing_extensions-*|async_timeout-*|six-*)
             echo "Skipping $whl (provided by Alpine)"
             continue
             ;;
