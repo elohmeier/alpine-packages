@@ -36,11 +36,16 @@ def extract_dependencies(pkg_data: dict, local_packages: set[str]) -> list[str]:
     return sorted(deps)
 
 
-def compute_phases(packages: dict) -> list[list[str]]:
-    """Compute build phases using topological sort."""
+def compute_phases(packages: dict, already_built: set[str]) -> list[list[str]]:
+    """Compute build phases using topological sort.
+
+    Args:
+        packages: Dict of packages that need to be built
+        already_built: Set of package names that are already published (don't need building)
+    """
     phases = []
     remaining = set(packages.keys())
-    built = set()
+    built = already_built.copy()  # Start with already-published packages
 
     while remaining:
         phase = [n for n in remaining if set(packages[n]["local_dependencies"]) <= built]
@@ -174,7 +179,9 @@ def main() -> None:
 
     # Filter to only packages that need building
     filtered = {k: v for k, v in packages.items() if k in needs_build}
-    phases = compute_phases(filtered) if filtered else []
+    # Packages that don't need building are considered already built
+    already_built = set(packages.keys()) - needs_build
+    phases = compute_phases(filtered, already_built) if filtered else []
 
     # Expand phases into matrix entries: [{package, arch, runner}, ...]
     arch_to_runner = {
