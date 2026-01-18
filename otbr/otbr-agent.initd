@@ -44,7 +44,7 @@ start_pre() {
 		}
 		einfo "Auto-detected backbone interface: $OTBR_INFRA_IF"
 		# Rebuild command args with detected interface
-		command_args="-I $OTBR_THREAD_IF -B $OTBR_INFRA_IF --rest-listen-address $OTBR_REST_ADDR --rest-listen-port $OTBR_REST_PORT spinel+hdlc+uart://$OTBR_RADIO_DEVICE"
+		command_args="-I $OTBR_THREAD_IF -B $OTBR_INFRA_IF --rest-listen-address $OTBR_REST_ADDR --rest-listen-port $OTBR_REST_PORT \"$OTBR_RADIO_URL\""
 	fi
 
 	# Load TUN module if not already loaded
