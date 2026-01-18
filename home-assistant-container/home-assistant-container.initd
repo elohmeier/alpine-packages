@@ -3,7 +3,7 @@
 name="home-assistant-container"
 description="Home Assistant Core (Podman container)"
 
-: ${HASS_IMAGE:="ghcr.io/home-assistant/home-assistant:stable"}
+: ${HASS_IMAGE:="ghcr.io/home-assistant/home-assistant:@VERSION@"}
 : ${HASS_CONFIG:="/var/lib/homeassistant"}
 : ${HASS_CONTAINER_NAME:="home-assistant"}
 : ${HASS_PORT:="8123"}

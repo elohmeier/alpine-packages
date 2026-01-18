@@ -1,7 +1,7 @@
 package:
   name: home-assistant-container
   version: 2026.1.2
-  epoch: 4
+  epoch: 5
   description: "Home Assistant Core running in Podman container"
   copyright:
     - license: Apache-2.0
@@ -67,6 +67,12 @@ environment:
 
 pipeline:
   - runs: |
+      # Substitute version placeholder in scripts
+      sed -i "s/@VERSION@/${{package.version}}/g" \
+        home-assistant-container/home-assistant-container.initd \
+        home-assistant-container/setup-home-assistant-image.sh \
+        home-assistant-container/home-assistant-container.confd
+
       # Install OpenRC init scripts
       install -Dm755 home-assistant-container/home-assistant-container.initd \
         "${{targets.destdir}}"/etc/init.d/home-assistant-container

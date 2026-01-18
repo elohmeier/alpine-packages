@@ -4,7 +4,7 @@
 
 set -e
 
-: ${HASS_IMAGE:="ghcr.io/home-assistant/home-assistant:stable"}
+: ${HASS_IMAGE:="ghcr.io/home-assistant/home-assistant:@VERSION@"}
 
 # Find SD card mount point
 find_sd_mount() {
