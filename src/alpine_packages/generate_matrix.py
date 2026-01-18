@@ -59,10 +59,10 @@ def compute_phases(packages: dict, already_built: set[str]) -> list[list[str]]:
     return phases
 
 
-def get_changed_files(base_ref: str | None) -> set[str]:
-    """Get changed files using git."""
+def get_changed_files(base_ref: str | None) -> set[str] | None:
+    """Get changed files using git. Returns None if no base_ref."""
     if not base_ref:
-        return set()  # No base = build everything
+        return None  # No base = use version comparison only
     try:
         result = subprocess.run(
             ["git", "diff", "--name-only", base_ref, "HEAD"],
@@ -72,7 +72,7 @@ def get_changed_files(base_ref: str | None) -> set[str]:
         )
         return set(result.stdout.strip().split("\n")) if result.stdout.strip() else set()
     except subprocess.CalledProcessError:
-        return set()
+        return None
 
 
 def get_published_versions(repo_url: str) -> dict[str, str]:
@@ -105,13 +105,20 @@ def get_published_versions(repo_url: str) -> dict[str, str]:
 def package_needs_build(
     name: str,
     pkg: dict,
-    changed_files: set[str],
+    changed_files: set[str] | None,
     published_versions: dict[str, str],
     rebuild_all: bool,
 ) -> bool:
     """Determine if a package needs to be built."""
     if rebuild_all:
         return True
+
+    yaml_version = f"{pkg['version']}-r{pkg['epoch']}"
+    published = published_versions.get(name, "")
+
+    # If no BASE_REF (changed_files is None), just compare versions
+    if changed_files is None:
+        return yaml_version != published
 
     # Check if any package files changed
     files_changed = any(
@@ -123,8 +130,6 @@ def package_needs_build(
         return False
 
     # Check if version differs from published
-    yaml_version = f"{pkg['version']}-r{pkg['epoch']}"
-    published = published_versions.get(name, "")
     return yaml_version != published
 
 
