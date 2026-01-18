@@ -4,15 +4,22 @@ name="home-assistant-container"
 description="Home Assistant Core (Podman container)"
 
 : ${HASS_IMAGE:="ghcr.io/home-assistant/home-assistant:@VERSION@"}
-: ${HASS_CONFIG:="/var/lib/homeassistant"}
-: ${HASS_CONTAINER_NAME:="home-assistant"}
-: ${HASS_PORT:="8123"}
-: ${HASS_TIMEZONE:="UTC"}
-: ${HASS_PRIVILEGED:="false"}
 : ${HASS_EXTRA_OPTS:=""}
 
+HASS_CONFIG="/var/lib/homeassistant"
+HASS_CONTAINER_NAME="home-assistant"
+
+# Auto-detect timezone from host
+if [ -f /etc/timezone ]; then
+    HASS_TIMEZONE=$(cat /etc/timezone)
+elif [ -L /etc/localtime ]; then
+    HASS_TIMEZONE=$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')
+else
+    HASS_TIMEZONE="UTC"
+fi
+
 depend() {
-    need net cgroups dbus
+    need net cgroups dbus bluetooth
     after firewall home-assistant-rostore
 }
 
@@ -52,10 +59,11 @@ start() {
     ebegin "Starting ${name}"
     podman run -d --rm --name "${HASS_CONTAINER_NAME}" \
         -v "${HASS_CONFIG}:/config" \
-        -v /run/dbus:/run/dbus:ro \
+        -v /run/dbus:/run/dbus \
+        -v /var/lib/bluetooth:/var/lib/bluetooth \
         -e "TZ=${HASS_TIMEZONE}" \
         --network=host \
-        ${HASS_PRIVILEGED:+--privileged} \
+        --privileged \
         ${HASS_EXTRA_OPTS} \
         "${HASS_IMAGE}" >/dev/null 2>&1
     eend $?

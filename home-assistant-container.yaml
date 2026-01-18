@@ -1,7 +1,7 @@
 package:
   name: home-assistant-container
   version: 2026.1.2
-  epoch: 8
+  epoch: 9
   description: "Home Assistant Core running in Podman container"
   copyright:
     - license: Apache-2.0
@@ -12,6 +12,8 @@ package:
       - netavark
       - squashfs-tools
       - dbus
+      - bluez
+      - bluez-openrc
   target-architecture:
     - x86_64
     - aarch64
@@ -27,10 +29,13 @@ package:
       adduser homeassistant gpio 2>/dev/null || true
     post-install: |
       #!/bin/sh
-      # Enable dbus (required dependency for container)
+      # Enable dbus (required for container and bluetooth)
       rc-update add dbus boot 2>/dev/null || true
-      # Start dbus if not running
       rc-service dbus status >/dev/null 2>&1 || rc-service dbus start 2>/dev/null || true
+
+      # Enable bluetooth
+      rc-update add bluetooth boot 2>/dev/null || true
+      rc-service bluetooth status >/dev/null 2>&1 || rc-service bluetooth start 2>/dev/null || true
 
       # Check if running on diskless system and auto-setup
       if [ -d /media/mmcblk0p1 ] || [ -d /media/sda1 ] || [ -d /media/usb ]; then
