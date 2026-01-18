@@ -6,6 +6,10 @@ OTBR_USER="root"
 # Thread radio device path
 OTBR_RADIO_DEVICE="/dev/ttyACM0"
 
+# Radio UART settings (for Nabu Casa ZBT-2, SkyConnect, etc.)
+OTBR_RADIO_BAUDRATE="460800"
+OTBR_RADIO_FLOW_CONTROL="1"
+
 # Thread network interface name
 OTBR_THREAD_IF="wpan0"
 
@@ -17,5 +21,8 @@ OTBR_INFRA_IF="auto"
 OTBR_REST_ADDR="::"
 OTBR_REST_PORT="8081"
 
+# Radio URL with UART settings
+OTBR_RADIO_URL="spinel+hdlc+uart://$OTBR_RADIO_DEVICE?uart-baudrate=$OTBR_RADIO_BAUDRATE&uart-flow-control"
+
 # Agent options: -I <thread_if> -B <backbone_if> <radio_url>
-OTBR_AGENT_OPTS="-I $OTBR_THREAD_IF -B $OTBR_INFRA_IF --rest-listen-address $OTBR_REST_ADDR --rest-listen-port $OTBR_REST_PORT spinel+hdlc+uart://$OTBR_RADIO_DEVICE"
+OTBR_AGENT_OPTS="-I $OTBR_THREAD_IF -B $OTBR_INFRA_IF --rest-listen-address $OTBR_REST_ADDR --rest-listen-port $OTBR_REST_PORT $OTBR_RADIO_URL"
