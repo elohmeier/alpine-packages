@@ -25,5 +25,7 @@ MATTER_SERVER_OPTS="--storage-path $MATTER_STORAGE --port $MATTER_PORT --log-lev
 # Uncomment to bind to specific interface
 # MATTER_SERVER_OPTS="$MATTER_SERVER_OPTS --primary-interface $MATTER_INTERFACE"
 
-# Uncomment to enable Bluetooth commissioning (requires bluetooth adapter)
-# MATTER_SERVER_OPTS="$MATTER_SERVER_OPTS --bluetooth-adapter 0"
+# Bluetooth adapter for BLE commissioning (required for Thread devices)
+# Set to empty to disable: MATTER_BLUETOOTH_ADAPTER=""
+MATTER_BLUETOOTH_ADAPTER="0"
+MATTER_SERVER_OPTS="$MATTER_SERVER_OPTS --bluetooth-adapter $MATTER_BLUETOOTH_ADAPTER"
