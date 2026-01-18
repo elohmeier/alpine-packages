@@ -1,0 +1,79 @@
+#!/bin/sh
+# Reset OTBR radio and restart service
+# Use when otbr-agent crashes due to radio communication timeout
+
+set -e
+
+# Find USB path for the Thread radio (Nabu Casa ZBT-2 or SkyConnect)
+find_radio_usb_path() {
+    for dev in /sys/bus/usb/devices/*; do
+        [ -f "$dev/product" ] || continue
+        product=$(cat "$dev/product" 2>/dev/null) || continue
+        case "$product" in
+            *ZBT-2*|*SkyConnect*|*RCP*|*Thread*)
+                basename "$dev"
+                return 0
+                ;;
+        esac
+    done
+
+    # Fallback: find device that provides ttyACM0
+    for dev in /sys/bus/usb/devices/*; do
+        [ -d "$dev" ] || continue
+        if ls "$dev/"*/tty/ttyACM0 >/dev/null 2>&1; then
+            basename "$dev"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+echo "=== OTBR Reset ==="
+
+# Find and reset USB radio
+usb_path=$(find_radio_usb_path) || {
+    echo "Error: Could not find Thread radio USB device" >&2
+    exit 1
+}
+
+echo "Found radio at USB path: $usb_path"
+echo "Resetting USB device..."
+
+echo "$usb_path" > /sys/bus/usb/drivers/usb/unbind 2>/dev/null || true
+sleep 2
+echo "$usb_path" > /sys/bus/usb/drivers/usb/bind
+sleep 3
+
+# Verify device is back
+if [ ! -e /dev/ttyACM0 ]; then
+    echo "Error: /dev/ttyACM0 not found after USB reset" >&2
+    exit 1
+fi
+
+echo "USB reset complete, device at /dev/ttyACM0"
+
+# Restart OTBR service
+echo "Restarting otbr-agent..."
+rc-service otbr-agent stop 2>/dev/null || true
+rc-service otbr-agent zap 2>/dev/null || true
+sleep 1
+rc-service otbr-agent start
+
+# Wait for Thread network to reconnect
+echo "Waiting for Thread network..."
+for i in 1 2 3 4 5 6; do
+    sleep 5
+    state=$(ot-ctl state 2>/dev/null | head -1)
+    echo "  State: $state"
+    case "$state" in
+        leader|router|child)
+            echo "OTBR reset complete - Thread network connected"
+            exit 0
+            ;;
+    esac
+done
+
+echo "Warning: Thread network not yet connected (state: $state)"
+echo "This may be normal if no other Thread devices are active"
+exit 0

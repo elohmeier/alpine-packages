@@ -1,7 +1,7 @@
 package:
   name: otbr
   version: 0.3.0
-  epoch: 6
+  epoch: 7
   description: "OpenThread Border Router"
   copyright:
     - license: BSD-3-Clause
@@ -51,6 +51,7 @@ package:
       echo ""
       echo "Tools:"
       echo "  ot-ctl                    Thread CLI for diagnostics"
+      echo "  otbr-reset                Reset radio and restart service"
       echo ""
       echo "Hardware:"
       echo "  Requires Thread RCP firmware on radio (e.g., SkyConnect, Yellow)"
@@ -114,6 +115,7 @@ pipeline:
       install -Dm644 otbr/otbr-agent.confd "${{targets.destdir}}"/etc/conf.d/otbr-agent
       install -Dm644 otbr/99-otbr.rules "${{targets.destdir}}"/etc/udev/rules.d/99-otbr.rules
       install -Dm644 otbr/otbr.sysctl "${{targets.destdir}}"/etc/sysctl.d/otbr.conf
+      install -Dm755 otbr/otbr-reset "${{targets.destdir}}"/usr/bin/otbr-reset
 
   - uses: strip
 
@@ -132,3 +134,6 @@ test:
     - runs: |
         # Test that ot-ctl binary exists and shows version
         ot-ctl --version || true
+    - runs: |
+        # Test that otbr-reset script is installed
+        test -x /usr/bin/otbr-reset
