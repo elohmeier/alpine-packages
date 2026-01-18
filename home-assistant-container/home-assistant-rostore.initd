@@ -13,7 +13,7 @@ depend() {
 _find_squashfs() {
     local sqfs
     for dir in /media/mmcblk0p1 /media/sda1 /media/usb; do
-        sqfs="$dir/home-assistant-image.squashfs"
+        sqfs=$(ls "$dir"/home-assistant-image-*.squashfs 2>/dev/null | head -1) || true
         [ -f "$sqfs" ] && echo "$sqfs" && return 0
     done
     return 1

@@ -10,6 +10,9 @@ set -e
 
 : ${HASS_IMAGE:="ghcr.io/home-assistant/home-assistant:@VERSION@"}
 
+# Extract version from image tag
+HASS_VERSION=$(echo "$HASS_IMAGE" | sed 's/.*://')
+
 # Parse arguments
 UPGRADE_MODE=false
 if [ "$1" = "--upgrade" ] || [ "$1" = "-u" ]; then
@@ -29,7 +32,22 @@ SD_MOUNT=$(find_sd_mount) || {
     exit 1
 }
 
-SQUASHFS_PATH="$SD_MOUNT/home-assistant-image.squashfs"
+SQUASHFS_PATH="$SD_MOUNT/home-assistant-image-${HASS_VERSION}.squashfs"
+
+# Check if this version already exists
+if [ -f "$SQUASHFS_PATH" ]; then
+    echo "Image already exists at $SQUASHFS_PATH"
+    exit 0
+fi
+
+# Check for any existing image (different version)
+OLD_SQUASHFS=$(ls "$SD_MOUNT"/home-assistant-image-*.squashfs 2>/dev/null | head -1) || true
+
+if [ -n "$OLD_SQUASHFS" ] && [ "$UPGRADE_MODE" != "true" ]; then
+    echo "Existing image found: $OLD_SQUASHFS"
+    echo "Use --upgrade to replace with version $HASS_VERSION"
+    exit 0
+fi
 
 # Use tmpfs for temporary storage (needs ~3GB RAM)
 WORKDIR="/tmp/home-assistant-setup"
@@ -48,25 +66,17 @@ trap cleanup EXIT
 echo "=== Setting up Home Assistant container image ==="
 echo "Target: $SQUASHFS_PATH"
 
-# Check if squashfs already exists
-if [ -f "$SQUASHFS_PATH" ]; then
-    if [ "$UPGRADE_MODE" = "true" ]; then
-        echo "Upgrade mode: replacing existing image..."
-        # Stop services before unmounting
-        rc-service home-assistant-container stop 2>/dev/null || true
-        rc-service home-assistant-rostore stop 2>/dev/null || true
-        # Remount and delete old squashfs
-        mount -o remount,rw "$SD_MOUNT"
-        rm -f "$SQUASHFS_PATH"
-    else
-        echo "Image already exists at $SQUASHFS_PATH"
-        echo "Use --upgrade to replace with new version"
-        exit 0
-    fi
-else
-    # Remount SD card read-write for fresh install
-    echo "Remounting $SD_MOUNT read-write..."
-    mount -o remount,rw "$SD_MOUNT"
+# Remount SD card read-write
+echo "Remounting $SD_MOUNT read-write..."
+mount -o remount,rw "$SD_MOUNT"
+
+# Remove old image if upgrading
+if [ -n "$OLD_SQUASHFS" ]; then
+    echo "Upgrade mode: stopping services..."
+    rc-service home-assistant-container stop 2>/dev/null || true
+    rc-service home-assistant-rostore stop 2>/dev/null || true
+    echo "Removing old image: $OLD_SQUASHFS"
+    rm -f "$OLD_SQUASHFS"
 fi
 
 # Create tmpfs for Podman storage (FAT32 doesn't support overlay)
@@ -101,8 +111,8 @@ echo ""
 echo "=== Done ==="
 echo "Image saved to: $SQUASHFS_PATH"
 
-# Restart services if upgrade mode
-if [ "$UPGRADE_MODE" = "true" ]; then
+# Restart services if we stopped them
+if [ -n "$OLD_SQUASHFS" ]; then
     echo "Restarting services..."
     rc-service home-assistant-rostore start
     rc-service home-assistant-container start
