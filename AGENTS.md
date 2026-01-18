@@ -87,82 +87,43 @@ Required secret: `ABUILD_PRIVKEY` (RSA signing key)
 
 ## Adding a New Package
 
-When adding a new package, update these files:
+1. **Create package files**:
+   ```
+   <package>.yaml           # melange build definition (must include target-architecture)
+   <package>/               # supporting files (optional)
+     <package>.initd        # OpenRC init script
+     <package>.confd        # OpenRC config
+     99-<package>.rules     # udev rules
+   ```
 
-### 1. Create package files
+2. **Required fields in `<package>.yaml`**:
+   ```yaml
+   package:
+     name: <package>
+     version: "1.0.0"
+     epoch: 0
+     target-architecture:    # Required - specify all target architectures
+       - x86_64
+       - aarch64
+   ```
 
+3. **Update `README.md`** - add package to the appropriate category table.
+
+That's it. The workflow automatically:
+- Discovers new packages by scanning `*.yaml` files
+- Detects dependencies from `package.dependencies.runtime` and `environment.contents.packages`
+- Computes build order using topological sort
+- Builds only when files change AND version differs from published
+
+### Testing locally
+
+```bash
+# Preview the build matrix
+REBUILD_ALL=true uv run generate-matrix
+
+# Test change detection
+BASE_REF=HEAD~1 uv run generate-matrix
 ```
-<package>.yaml           # melange build definition
-<package>/               # supporting files (optional)
-  <package>.initd        # OpenRC init script
-  <package>.confd        # OpenRC config
-  99-<package>.rules     # udev rules
-```
-
-### 2. Update `.github/workflows/build.yaml`
-
-Add in order:
-
-1. **outputs** (detect-changes job):
-   ```yaml
-   build-<package>: ${{ steps.matrix.outputs.build-<package> }}
-   ```
-
-2. **file filters** (detect-changes job):
-   ```yaml
-   <package>:
-     - '<package>.yaml'
-     - '<package>/**'
-   ```
-
-3. **version check loop** - add package name to the `for pkg in ...` list
-
-4. **env vars** (compute matrix step):
-   ```yaml
-   FILE_<PACKAGE>: ${{ steps.file-changes.outputs.<package> }}
-   VERSION_<PACKAGE>: ${{ steps.version-check.outputs.<package>_version_changed }}
-   ```
-
-5. **build variables** - add `build_<package>="false"` and set to `"true"` in rebuild_all block
-
-6. **individual check**:
-   ```yaml
-   if [[ "$FILE_<PACKAGE>" == "true" ]]; then
-     if [[ "$VERSION_<PACKAGE>" == "true" ]]; then
-       build_<package>="true"
-     else
-       echo "::warning::<package> files changed but version not bumped - skipping build"
-     fi
-   fi
-   ```
-
-7. **dependency propagation** (if package depends on another):
-   ```yaml
-   if [[ "$build_<dependency>" == "true" && "$build_<package>" != "true" ]]; then
-     echo "::notice::<package> will rebuild due to <dependency> dependency"
-     build_<package>="true"
-   fi
-   ```
-
-8. **output and summary**:
-   ```yaml
-   echo "build-<package>=$build_<package>" >> "$GITHUB_OUTPUT"
-   echo "| <package> | $build_<package> |" >> "$GITHUB_STEP_SUMMARY"
-   ```
-
-9. **any-builds check** - add `|| "$build_<package>" == "true"` to the condition
-
-10. **build job** - add new job following existing patterns (standalone or with dependencies)
-
-11. **publish job** - add to `needs:` list
-
-### 3. Update `README.md`
-
-Add package to the appropriate category table and add a "Package Details" section if it's a user-facing package with services.
-
-### 4. Update `index.html`
-
-The package table is auto-generated from APKINDEX during publish - no manual update needed.
 
 ## Relevant sources
 

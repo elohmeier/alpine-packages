@@ -1,0 +1,123 @@
+name: Build Package
+description: Build a melange package with signing and caching
+
+inputs:
+  package:
+    description: Package name
+    required: true
+  arch:
+    description: Target architecture
+    required: true
+  signing-key:
+    description: Private signing key content
+    required: true
+  repo-url:
+    description: Published repo URL for fetching dependencies
+    required: true
+  local-dependencies:
+    description: JSON array of local package dependencies
+    required: false
+    default: "[]"
+
+runs:
+  using: composite
+  steps:
+    - uses: chainguard-dev/actions/setup-melange@main
+      with:
+        version: latest-release
+
+    - name: Setup signing key
+      shell: bash
+      run: |
+        echo "${{ inputs.signing-key }}" > melange.pem
+        openssl rsa -in melange.pem -out packages@elohmeier.rsa -traditional 2>/dev/null || cp melange.pem packages@elohmeier.rsa
+        openssl rsa -in packages@elohmeier.rsa -pubout -out packages@elohmeier.rsa.pub
+        chmod 600 packages@elohmeier.rsa
+        rm -f melange.pem
+
+    - name: Setup cache directory
+      shell: bash
+      run: |
+        mkdir -p cache
+        sudo chmod 777 cache
+
+    - uses: actions/cache@v4
+      with:
+        path: cache
+        key: melange-${{ inputs.package }}-${{ inputs.arch }}-${{ hashFiles(format('{0}.yaml', inputs.package)) }}
+        restore-keys: |
+          melange-${{ inputs.package }}-${{ inputs.arch }}-
+
+    - name: Create packages directory
+      shell: bash
+      run: mkdir -p packages/${{ inputs.arch }}
+
+    - name: Fetch published dependencies
+      shell: bash
+      env:
+        REPO_URL: ${{ inputs.repo-url }}
+      run: |
+        mkdir -p packages/${{ inputs.arch }}
+        LOCAL_DEPS='${{ inputs.local-dependencies }}'
+
+        # Fetch APKINDEX to find package versions
+        if curl -sL --fail "${REPO_URL}/${{ inputs.arch }}/APKINDEX.tar.gz" -o /tmp/APKINDEX.tar.gz 2>/dev/null; then
+          tar -xzf /tmp/APKINDEX.tar.gz -C /tmp APKINDEX 2>/dev/null || true
+
+          for dep in $(echo "$LOCAL_DEPS" | jq -r '.[]'); do
+            # Skip if we already have this package from artifacts
+            if ls packages/${{ inputs.arch }}/${dep}-*.apk 2>/dev/null | grep -q .; then
+              echo "Already have ${dep} from artifacts"
+              continue
+            fi
+
+            # Get version from APKINDEX
+            pkg_version=$(awk -v pkg="$dep" '
+              /^P:/ { current = substr($0, 3) }
+              /^V:/ && current == pkg { print substr($0, 3); exit }
+            ' /tmp/APKINDEX)
+
+            if [[ -n "$pkg_version" ]]; then
+              pkg_file="${dep}-${pkg_version}.apk"
+              echo "Fetching published ${dep}: $pkg_file"
+              curl -sL "${REPO_URL}/${{ inputs.arch }}/${pkg_file}" -o "packages/${{ inputs.arch }}/${pkg_file}" || true
+            fi
+          done
+        fi
+
+    - name: Generate local repo index
+      shell: bash
+      run: |
+        if ls packages/${{ inputs.arch }}/*.apk 2>/dev/null | grep -q .; then
+          melange index \
+            --signing-key packages@elohmeier.rsa \
+            --arch ${{ inputs.arch }} \
+            -o packages/${{ inputs.arch }}/APKINDEX.tar.gz \
+            packages/${{ inputs.arch }}/*.apk
+        fi
+
+    - name: Build package
+      shell: bash
+      run: |
+        BUILD_ARGS=(
+          --arch ${{ inputs.arch }}
+          --signing-key packages@elohmeier.rsa
+          --out-dir packages/
+          --cache-dir cache/
+          --generate-index=false
+        )
+
+        # Add local repo if we have dependencies
+        if ls packages/${{ inputs.arch }}/*.apk 2>/dev/null | grep -q .; then
+          BUILD_ARGS+=(--keyring-append packages@elohmeier.rsa.pub)
+          BUILD_ARGS+=(--repository-append packages/)
+        fi
+
+        sudo melange build ${{ inputs.package }}.yaml "${BUILD_ARGS[@]}"
+        sudo chown -R $(id -u):$(id -g) packages/ cache/
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: packages-${{ inputs.arch }}-${{ inputs.package }}
+        path: packages/${{ inputs.arch }}
+        if-no-files-found: ignore

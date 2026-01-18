@@ -1,0 +1,329 @@
+name: Build Packages (Dynamic)
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      rebuild_all:
+        description: 'Rebuild all packages'
+        type: boolean
+        default: false
+
+env:
+  REPO_URL: https://elohmeier.github.io/alpine-packages
+
+jobs:
+  # ============================================
+  # Generate build matrix from package YAMLs
+  # ============================================
+  generate-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.matrix.outputs.packages }}
+      phases: ${{ steps.matrix.outputs.phases }}
+      any-builds: ${{ steps.matrix.outputs.any-builds }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Generate matrix
+        id: matrix
+        env:
+          BASE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          REBUILD_ALL: ${{ inputs.rebuild_all }}
+        run: uv run generate-matrix >> $GITHUB_OUTPUT
+
+      - name: Summary
+        run: |
+          echo "### Build Matrix" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          echo '${{ steps.matrix.outputs.packages }}' | jq . >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # Build Phase 1: Packages with no local deps
+  # ============================================
+  build-phase-1:
+    needs: generate-matrix
+    if: needs.generate-matrix.outputs.any-builds == 'true' && fromJSON(needs.generate-matrix.outputs.phases)[0] != null
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.generate-matrix.outputs.phases)[0] }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get package info
+        id: pkg
+        run: |
+          PKG='${{ toJSON(fromJSON(needs.generate-matrix.outputs.packages)[matrix.package]) }}'
+          echo "local-deps=$(echo "$PKG" | jq -c '.local_dependencies')" >> $GITHUB_OUTPUT
+
+      - uses: ./.github/actions/build-package
+        with:
+          package: ${{ matrix.package }}
+          arch: ${{ matrix.arch }}
+          signing-key: ${{ secrets.ABUILD_PRIVKEY }}
+          repo-url: ${{ env.REPO_URL }}
+          local-dependencies: ${{ steps.pkg.outputs.local-deps }}
+
+  # ============================================
+  # Build Phase 2: Packages depending on Phase 1
+  # ============================================
+  build-phase-2:
+    needs: [generate-matrix, build-phase-1]
+    if: |
+      always() &&
+      needs.generate-matrix.outputs.any-builds == 'true' &&
+      fromJSON(needs.generate-matrix.outputs.phases)[1] != null &&
+      (needs.build-phase-1.result == 'success' || needs.build-phase-1.result == 'skipped')
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.generate-matrix.outputs.phases)[1] }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get package info
+        id: pkg
+        run: |
+          PKG='${{ toJSON(fromJSON(needs.generate-matrix.outputs.packages)[matrix.package]) }}'
+          echo "local-deps=$(echo "$PKG" | jq -c '.local_dependencies')" >> $GITHUB_OUTPUT
+
+      # Download artifacts from Phase 1 for dependencies
+      - name: Download dependency artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: packages-${{ matrix.arch }}-*
+          path: packages/${{ matrix.arch }}
+          merge-multiple: true
+        continue-on-error: true
+
+      - uses: ./.github/actions/build-package
+        with:
+          package: ${{ matrix.package }}
+          arch: ${{ matrix.arch }}
+          signing-key: ${{ secrets.ABUILD_PRIVKEY }}
+          repo-url: ${{ env.REPO_URL }}
+          local-dependencies: ${{ steps.pkg.outputs.local-deps }}
+
+  # ============================================
+  # Build Phase 3: Packages depending on Phase 2
+  # ============================================
+  build-phase-3:
+    needs: [generate-matrix, build-phase-2]
+    if: |
+      always() &&
+      needs.generate-matrix.outputs.any-builds == 'true' &&
+      fromJSON(needs.generate-matrix.outputs.phases)[2] != null &&
+      (needs.build-phase-2.result == 'success' || needs.build-phase-2.result == 'skipped')
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.generate-matrix.outputs.phases)[2] }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get package info
+        id: pkg
+        run: |
+          PKG='${{ toJSON(fromJSON(needs.generate-matrix.outputs.packages)[matrix.package]) }}'
+          echo "local-deps=$(echo "$PKG" | jq -c '.local_dependencies')" >> $GITHUB_OUTPUT
+
+      # Download artifacts from previous phases for dependencies
+      - name: Download dependency artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: packages-${{ matrix.arch }}-*
+          path: packages/${{ matrix.arch }}
+          merge-multiple: true
+        continue-on-error: true
+
+      - uses: ./.github/actions/build-package
+        with:
+          package: ${{ matrix.package }}
+          arch: ${{ matrix.arch }}
+          signing-key: ${{ secrets.ABUILD_PRIVKEY }}
+          repo-url: ${{ env.REPO_URL }}
+          local-dependencies: ${{ steps.pkg.outputs.local-deps }}
+
+  # ============================================
+  # Publish to GitHub Pages
+  # ============================================
+  publish:
+    needs: [generate-matrix, build-phase-1, build-phase-2, build-phase-3]
+    if: |
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      needs.generate-matrix.outputs.any-builds == 'true' &&
+      !contains(needs.*.result, 'failure')
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: chainguard-dev/actions/setup-melange@main
+        with:
+          version: latest-release
+
+      - name: Setup signing key
+        run: |
+          echo "${{ secrets.ABUILD_PRIVKEY }}" > melange.pem
+          openssl rsa -in melange.pem -out packages@elohmeier.rsa -traditional 2>/dev/null || cp melange.pem packages@elohmeier.rsa
+          chmod 600 packages@elohmeier.rsa
+          openssl rsa -in packages@elohmeier.rsa -pubout -out packages@elohmeier.rsa.pub
+          rm -f melange.pem
+
+      # Download all newly built artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: packages-*
+          merge-multiple: false
+
+      # Fetch existing packages from published repo that weren't rebuilt
+      - name: Fetch existing packages
+        run: |
+          mkdir -p _site
+
+          for arch in x86_64 aarch64 armhf; do
+            mkdir -p "_site/$arch"
+
+            # Try to fetch existing APKINDEX
+            if curl -sL --fail "${REPO_URL}/${arch}/APKINDEX.tar.gz" -o "/tmp/APKINDEX-${arch}.tar.gz" 2>/dev/null; then
+              tar -xzf "/tmp/APKINDEX-${arch}.tar.gz" -O APKINDEX > "/tmp/APKINDEX-${arch}"
+
+              # Get list of all packages and their versions from published repo
+              awk '/^P:/{pkg=substr($0,3)} /^V:/{ver=substr($0,3); print pkg"-"ver".apk"}' "/tmp/APKINDEX-${arch}" | while read pkg_file; do
+                # Extract package name (everything before the version)
+                pkg_name=$(echo "$pkg_file" | sed 's/-[0-9].*//')
+
+                # Check if we have a new artifact for this package
+                has_new_artifact=false
+                if ls artifacts/packages-${arch}-${pkg_name}/*.apk 2>/dev/null | grep -q .; then
+                  has_new_artifact=true
+                fi
+
+                # If no new artifact, fetch from published repo
+                if [[ "$has_new_artifact" == "false" ]]; then
+                  echo "Fetching existing package: ${arch}/${pkg_file}"
+                  curl -sL "${REPO_URL}/${arch}/${pkg_file}" -o "_site/${arch}/${pkg_file}" || true
+                fi
+              done
+            fi
+          done
+
+      - name: Prepare site
+        run: |
+          mkdir -p _site/keys
+
+          # Copy newly built packages
+          for dir in artifacts/packages-*; do
+            if [[ -d "$dir" ]]; then
+              name=${dir#artifacts/packages-}
+              arch=${name%%-*}
+              mkdir -p "_site/$arch"
+              cp -r "$dir"/* "_site/$arch"/
+            fi
+          done
+
+          cp packages@elohmeier.rsa.pub _site/keys/packages@elohmeier.rsa.pub
+          cp index.html _site/
+
+      - name: Generate APK indexes
+        run: |
+          for arch_dir in _site/*/; do
+            arch=$(basename "$arch_dir")
+            case "$arch" in
+              x86_64|aarch64|armhf|armv7|x86) ;;
+              *) continue ;;
+            esac
+
+            # Only generate index if we have packages
+            if ls "$arch_dir"/*.apk 2>/dev/null | grep -q .; then
+              echo "Generating APKINDEX for $arch"
+              melange index \
+                --signing-key packages@elohmeier.rsa \
+                --arch "$arch" \
+                -o "$arch_dir/APKINDEX.tar.gz" \
+                "$arch_dir"/*.apk
+            fi
+          done
+
+      - name: Generate package table
+        run: |
+          # Collect package info from all architectures
+          for arch_dir in _site/*/; do
+            arch=$(basename "$arch_dir")
+            case "$arch" in
+              x86_64|aarch64|armhf|armv7|x86) ;;
+              *) continue ;;
+            esac
+
+            if [[ -f "$arch_dir/APKINDEX.tar.gz" ]]; then
+              tar -xzf "$arch_dir/APKINDEX.tar.gz" -O APKINDEX 2>/dev/null | \
+              awk -v arch="$arch" '
+                /^P:/ { pkg = substr($0, 3) }
+                /^V:/ { ver = substr($0, 3) }
+                /^T:/ { desc = substr($0, 3) }
+                /^$/ {
+                  if (pkg != "") {
+                    print pkg "\t" ver "\t" desc "\t" arch
+                  }
+                  pkg = ""; ver = ""; desc = ""
+                }
+              ' >> /tmp/all_packages.tsv
+            fi
+          done
+
+          # Build HTML table
+          echo '<table>' > /tmp/packages_table.html
+          echo '<tr><th>Package</th><th>Version</th><th>Description</th><th>Architectures</th></tr>' >> /tmp/packages_table.html
+
+          # Process and deduplicate packages
+          if [[ -f /tmp/all_packages.tsv ]]; then
+            sort -t$'\t' -k1,1 /tmp/all_packages.tsv | \
+            awk -F'\t' '
+              {
+                pkg = $1; ver = $2; desc = $3; arch = $4
+                if (pkg != prev_pkg && prev_pkg != "") {
+                  print prev_pkg "\t" prev_ver "\t" prev_desc "\t" archs
+                  archs = ""
+                }
+                prev_pkg = pkg; prev_ver = ver; prev_desc = desc
+                archs = (archs == "") ? arch : archs ", " arch
+              }
+              END {
+                if (prev_pkg != "") {
+                  print prev_pkg "\t" prev_ver "\t" prev_desc "\t" archs
+                }
+              }
+            ' | sort | while IFS=$'\t' read -r pkg ver desc archs; do
+              echo "<tr><td><strong>$pkg</strong></td><td>$ver</td><td>$desc</td><td>$archs</td></tr>" >> /tmp/packages_table.html
+            done
+          fi
+
+          echo '</table>' >> /tmp/packages_table.html
+
+          # Replace placeholder in index.html
+          sed -i 's|<!-- PACKAGES_TABLE -->|'"$(cat /tmp/packages_table.html | tr '\n' ' ')"'|' _site/index.html
+
+      - uses: actions/upload-pages-artifact@v3
+
+      - uses: actions/deploy-pages@v4

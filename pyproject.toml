@@ -1,0 +1,19 @@
+[project]
+name = "alpine-packages"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Enno Richter", email = "enno@nerdworks.de" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "pyyaml>=6.0.3",
+]
+
+[project.scripts]
+generate-matrix = "alpine_packages.generate_matrix:main"
+
+[build-system]
+requires = ["uv_build>=0.9.24,<0.10.0"]
+build-backend = "uv_build"
