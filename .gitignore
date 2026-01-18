@@ -8,3 +8,4 @@ melange-cache/
 # Keys
 *.rsa
 *.rsa.pub
+.test-cache/

@@ -31,12 +31,14 @@ SD_MOUNT=$(find_sd_mount) || {
 
 SQUASHFS_PATH="$SD_MOUNT/home-assistant-image.squashfs"
 
-# Use temp directory on SD card (tmpfs may not have enough space)
-WORKDIR="$SD_MOUNT/.home-assistant-setup"
+# Use tmpfs for temporary storage (needs ~3GB RAM)
+WORKDIR="/tmp/home-assistant-setup"
+TEMP_MOUNT="$WORKDIR/storage"
+
 cleanup() {
     echo "Cleaning up..."
-    # Unmount temp storage if mounted
-    umount "$SD_MOUNT/.home-assistant-setup/storage" 2>/dev/null || true
+    # Unmount tmpfs if mounted
+    umount "$TEMP_MOUNT" 2>/dev/null || true
     rm -rf "$WORKDIR"
     # Ensure SD card is remounted read-only on exit
     mount -o remount,ro "$SD_MOUNT" 2>/dev/null || true
@@ -67,17 +69,10 @@ else
     mount -o remount,rw "$SD_MOUNT"
 fi
 
-# Create temp ext4 image for Podman storage (FAT32 doesn't support overlay)
-echo "Creating temporary storage image..."
-mkdir -p "$WORKDIR"
-TEMP_IMG="$WORKDIR/temp-storage.img"
-TEMP_MOUNT="$WORKDIR/storage"
-
-# Create 3GB sparse image and format as ext4 (FAT32 has 4GB limit)
-truncate -s 3G "$TEMP_IMG"
-mkfs.ext4 -q "$TEMP_IMG"
-mkdir -p "$TEMP_MOUNT"
-mount -o loop "$TEMP_IMG" "$TEMP_MOUNT"
+# Create tmpfs for Podman storage (FAT32 doesn't support overlay)
+echo "Creating temporary storage in RAM..."
+mkdir -p "$WORKDIR" "$TEMP_MOUNT"
+mount -t tmpfs -o size=3G tmpfs "$TEMP_MOUNT"
 
 # Create Podman storage config
 mkdir -p "$TEMP_MOUNT/graphroot" "$WORKDIR/runroot"
