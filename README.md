@@ -56,6 +56,12 @@ apk update
 |---------|-------------|---------------|
 | **ssh-to-age** | Convert SSH Ed25519 keys to age keys | x86_64, aarch64 |
 
+### Observability
+
+| Package | Description | Architectures |
+|---------|-------------|---------------|
+| **vector** | High-performance observability data pipeline for logs, metrics, and traces | x86_64, aarch64 |
+
 ### Libraries
 
 | Package | Description | Architectures |
@@ -78,12 +84,17 @@ rc-update add home-assistant-container default
 - **Port:** 8123 (Web UI)
 - **Config:** `/etc/conf.d/home-assistant-container`
 - **Data:** `/var/lib/homeassistant`
-- **Image:** `ghcr.io/home-assistant/home-assistant:stable` (configurable)
+- **Image:** `ghcr.io/home-assistant/home-assistant:<version>` (configurable via `HASS_IMAGE`)
 
-**USB device passthrough** (Zigbee/Z-Wave): Edit `/etc/conf.d/home-assistant-container`:
-```sh
-HASS_EXTRA_OPTS="--device /dev/ttyUSB0:/dev/ttyUSB0"
-```
+**What's automated on install:**
+- Creates `homeassistant` user with hardware access (dialout, gpio groups)
+- Enables dbus and bluetooth services
+- Sets up udev rules for Zigbee/Z-Wave USB devices (creates `/dev/zigbee`, `/dev/zwave` symlinks)
+- On diskless systems: automatically creates squashfs image on SD card
+
+**USB devices:** Zigbee and Z-Wave adapters are auto-detected. Common devices get symlinks:
+- `/dev/zigbee` - Silicon Labs, ConBee, TI CC2531, SMLIGHT adapters
+- `/dev/zwave` - Aeotec Z-Stick, Zooz ZST10
 
 **Container management:**
 ```sh
@@ -91,37 +102,23 @@ podman logs -f home-assistant      # View logs
 podman exec -it home-assistant bash # Shell access
 ```
 
-**Diskless setup (Alpine running from RAM):**
+**Diskless systems (Alpine running from RAM):**
 
-For diskless Alpine systems, the setup script pulls the container image and creates a squashfs on the SD card:
+Diskless setup is fully automated. On install, the package detects SD card mount points and:
+1. Pulls the container image to a tmpfs
+2. Creates a compressed squashfs on the SD card (~400MB)
+3. Enables the `home-assistant-rostore` service to mount it on boot
 
+Requirements: ~3GB free RAM during initial setup, network access, SD card with ~500MB free.
+
+After install on diskless, just persist and start:
 ```sh
-# 1. Install the package
-apk add home-assistant-container
-
-# 2. Setup container image (requires network, creates squashfs on SD card)
-setup-home-assistant-image
-
-# 3. Start services
-rc-service home-assistant-rostore start
-rc-service home-assistant-container start
-rc-update add home-assistant-rostore boot
-rc-update add home-assistant-container default
-
-# 4. Persist with lbu
 lbu commit
+rc-service home-assistant-container start
+rc-update add home-assistant-container default
 ```
 
-The setup script:
-- Temporarily remounts SD card read-write
-- Pulls the Home Assistant container image
-- Creates a compressed squashfs on the SD card (~400MB)
-- Remounts SD card read-only
-
-Requirements:
-- Network access during setup
-- ~2GB temporary space for image pull
-- SD card with ~500MB free space
+Package upgrades on diskless systems automatically rebuild the squashfs image.
 
 ### matter-server
 
@@ -193,6 +190,20 @@ apk add python314
 - **Binary:** `/usr/bin/python3.14`
 - **Features:** PGO, LTO, zstd compression (stdlib), shared library
 - **Note:** Available for projects requiring Python 3.14
+
+### vector
+
+High-performance observability data pipeline for collecting, transforming, and routing logs, metrics, and traces.
+
+```sh
+apk add vector
+rc-service vector start
+rc-update add vector default
+```
+
+- **Config:** `/etc/vector/vector.yaml`
+- **Data:** `/var/lib/vector`
+- **Service config:** `/etc/conf.d/vector`
 
 ## Building Locally
 

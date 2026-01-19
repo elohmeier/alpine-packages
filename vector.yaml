@@ -1,0 +1,113 @@
+package:
+  name: vector
+  version: "0.52.0"
+  epoch: 0
+  description: "High-performance observability data pipeline"
+  copyright:
+    - license: MPL-2.0
+  target-architecture:
+    - aarch64
+    - x86_64
+  dependencies:
+    runtime:
+      - libgcc
+      - librdkafka
+      - cyrus-sasl-gssapiv2
+      - krb5-libs
+  scriptlets:
+    pre-install: |
+      #!/bin/sh
+      addgroup -S vector 2>/dev/null
+      adduser -S -D -h /var/lib/vector -s /sbin/nologin -G vector -g vector vector 2>/dev/null
+      adduser vector adm 2>/dev/null
+      exit 0
+  checks:
+    disabled:
+      - usrmerge
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates
+      - cargo
+      - clang-dev
+      - cmake
+      - cyrus-sasl-dev
+      - krb5-dev
+      - librdkafka-dev
+      - openssl-dev
+      - perl
+      - protobuf-dev
+      - protoc
+      - python3
+      - rust
+  environment:
+    OPENSSL_NO_VENDOR: "1"
+    CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/vectordotdev/vector.git
+      tag: v${{package.version}}
+      expected-commit: ca5bf2690ffcfc2c95d320cf7156b1df1b28a080
+
+  - runs: |
+      # Patch Cargo.toml to use system rdkafka with dynamic linking and system gssapi
+      # This avoids building vendored krb5 which has GCC compatibility issues
+      sed -i 's/rdkafka?\/cmake_build/rdkafka?\/dynamic-linking/g' Cargo.toml
+      sed -i 's/rdkafka?\/gssapi-vendored/rdkafka?\/gssapi/g' Cargo.toml
+
+      # Fetch dependencies - allow lock file update for the rdkafka changes
+      cargo fetch
+
+  - runs: |
+      cargo build \
+        --release \
+        --frozen \
+        --no-default-features \
+        --features default-musl
+
+      install -Dm755 target/release/vector "${{targets.destdir}}"/usr/bin/vector
+
+  - runs: |
+      # Install default config
+      install -Dm644 config/vector.yaml "${{targets.destdir}}"/etc/vector/vector.yaml
+
+      # Install logrotate config
+      install -Dm644 vector/logrotate "${{targets.destdir}}"/etc/logrotate.d/vector
+
+      # Install OpenRC files
+      install -Dm755 vector/vector.initd "${{targets.destdir}}"/etc/init.d/vector
+      install -Dm644 vector/vector.confd "${{targets.destdir}}"/etc/conf.d/vector
+
+      # Create data directory
+      install -dm755 "${{targets.destdir}}"/var/lib/vector
+
+  - uses: strip
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+        - libgcc
+        - librdkafka
+        - cyrus-sasl-gssapiv2
+        - krb5-libs
+  pipeline:
+    - runs: |
+        vector --version
+        vector --help
