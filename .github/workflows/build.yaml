@@ -198,9 +198,13 @@ jobs:
           merge-multiple: false
 
       # Fetch existing packages from published repo that weren't rebuilt
+      # Only fetches packages that still have a .yaml file in the repo
       - name: Fetch existing packages
         run: |
           mkdir -p _site
+
+          # Build list of valid package names from existing .yaml files
+          valid_packages=$(ls -1 *.yaml 2>/dev/null | sed 's/\.yaml$//' | sort -u)
 
           for arch in x86_64 aarch64 armhf; do
             mkdir -p "_site/$arch"
@@ -213,6 +217,12 @@ jobs:
               awk '/^P:/{pkg=substr($0,3)} /^V:/{ver=substr($0,3); print pkg"-"ver".apk"}' "/tmp/APKINDEX-${arch}" | while read pkg_file; do
                 # Extract package name (everything before the version)
                 pkg_name=$(echo "$pkg_file" | sed 's/-[0-9].*//')
+
+                # Skip packages that no longer have a .yaml file
+                if ! echo "$valid_packages" | grep -qx "$pkg_name"; then
+                  echo "Skipping removed package: ${arch}/${pkg_file}"
+                  continue
+                fi
 
                 # Check if we have a new artifact for this package
                 has_new_artifact=false
