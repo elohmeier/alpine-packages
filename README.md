@@ -23,6 +23,7 @@ apk update
 
 | Package | Description | Architectures |
 |---------|-------------|---------------|
+| **adaptive-lighting** | Home Assistant custom integration for adaptive lighting | x86_64, aarch64 |
 | **home-assistant-container** | Home Assistant Core - Podman container | x86_64, aarch64 |
 | **matter-server** | Open Home Foundation Matter Server - WebSocket-based Matter controller for Home Assistant | x86_64, aarch64 |
 | **chip-sdk** | Matter/CHIP SDK Python bindings | x86_64, aarch64 |
@@ -70,6 +71,20 @@ apk update
 | **detect-radio-module** | HomeMatic RF module detection tool | x86_64, aarch64 |
 
 ## Package Details
+
+### adaptive-lighting
+
+Home Assistant custom integration that automatically adjusts light brightness and color temperature throughout the day.
+
+```sh
+apk add adaptive-lighting
+rc-service home-assistant-container restart
+```
+
+- **Location:** `/var/lib/homeassistant/custom_components/adaptive_lighting/`
+- **Requires:** home-assistant-container
+
+After installing, configure via Home Assistant Settings → Devices & Services → Add Integration → Adaptive Lighting.
 
 ### home-assistant-container
 
