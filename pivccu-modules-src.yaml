@@ -1,0 +1,157 @@
+package:
+  name: pivccu-modules-src
+  version: 0_git20250117
+  epoch: 0
+  description: "piVCCU kernel modules source for HomeMatic RF hardware (AKMS)"
+  copyright:
+    - license: GPL-2.0-only
+  dependencies:
+    runtime:
+      - akms
+  target-architecture:
+    - aarch64
+  checks:
+    disabled:
+      - usrmerge
+  scriptlets:
+    post-install: |
+      #!/bin/sh
+      echo ""
+      echo "=== piVCCU Kernel Modules Source Installed ==="
+      echo "AKMS will automatically build modules for your kernel."
+      echo ""
+      echo "Modules provided:"
+      echo "  - generic_raw_uart: Core raw UART framework"
+      echo "  - eq3_char_loop: eQ-3 character device loop"
+      echo "  - pl011_raw_uart: PL011 UART support (RPi)"
+      echo "  - rpi_rf_mod_led: RPI-RF-MOD LED control"
+      echo ""
+      echo "Device tree overlay installed to /boot/overlays/"
+      echo "Add 'dtoverlay=pivccu-raspberrypi' to usercfg.txt"
+      echo ""
+      # Trigger AKMS build for all installed kernels
+      if command -v akms >/dev/null 2>&1; then
+        akms install pivccu 2>/dev/null || true
+      fi
+    pre-deinstall: |
+      #!/bin/sh
+      if command -v akms >/dev/null 2>&1; then
+        akms uninstall pivccu 2>/dev/null || true
+      fi
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+      - ca-certificates
+      - git
+      - dtc
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/alexreinert/piVCCU.git
+      branch: master
+      expected-commit: 8be20bf4b777bdf4cd47b25f5903c2deeeb5ae4a
+
+  - runs: |
+      DESTDIR="${{targets.destdir}}"
+      VERSION="0_git20250117"
+      SRC_DIR="$DESTDIR/usr/src/pivccu-${VERSION}"
+      SRCROOT="$(pwd)"
+
+      mkdir -p "$SRC_DIR"
+
+      # Copy kernel module sources
+      cp kernel/generic_raw_uart.c "$SRC_DIR/"
+      cp kernel/generic_raw_uart.h "$SRC_DIR/"
+      cp kernel/eq3_char_loop.c "$SRC_DIR/"
+      cp kernel/pl011_raw_uart.c "$SRC_DIR/"
+      cp kernel/rpi_rf_mod_led.c "$SRC_DIR/"
+      cp kernel/hm.h "$SRC_DIR/"
+      cp kernel/stack_protector.include "$SRC_DIR/"
+      cp kernel/Makefile "$SRC_DIR/"
+
+      # Copy devkey.inc if present (needed for some module versions)
+      cp kernel/devkey.inc "$SRC_DIR/" 2>/dev/null || true
+
+      # Apply kernel compatibility patches
+      cd "$SRC_DIR"
+
+      # Note: class_create() compatibility is handled by generic_raw_uart.h
+
+      # Patch for Linux 6.12+: no_llseek removed, use noop_llseek
+      sed -i 's/\.llseek = no_llseek/.llseek = noop_llseek/g' generic_raw_uart.c
+      sed -i 's/\.llseek = no_llseek/.llseek = noop_llseek/g' eq3_char_loop.c
+
+      # Install AKMBUILD
+      cat > "$SRC_DIR/AKMBUILD" << 'EOF'
+      # AKMBUILD for piVCCU kernel modules
+      # Provides HomeMatic RF hardware support (RPI-RF-MOD / HM-MOD-RPI-PCB)
+
+      modname=pivccu
+      modver=0_git20250117
+
+      # Space-separated list of built kernel objects
+      built_modules='generic_raw_uart.ko eq3_char_loop.ko pl011_raw_uart.ko rpi_rf_mod_led.ko'
+
+      build() {
+          make ${MAKEFLAGS:-} KERNEL_DIR="$kernel_srcdir" -C "$builddir" modules
+      }
+      EOF
+      # Remove leading whitespace from AKMBUILD
+      sed -i 's/^      //' "$SRC_DIR/AKMBUILD"
+
+      # Install module loading config
+      mkdir -p "$DESTDIR/etc/modules-load.d"
+      cat > "$DESTDIR/etc/modules-load.d/pivccu.conf" << 'EOF'
+      # piVCCU kernel modules for HomeMatic RF hardware
+      generic_raw_uart
+      eq3_char_loop
+      EOF
+      # Remove leading whitespace from pivccu.conf
+      sed -i 's/^      //' "$DESTDIR/etc/modules-load.d/pivccu.conf"
+
+      # Compile device tree overlay
+      mkdir -p "$DESTDIR/boot/overlays"
+      dtc -@ -I dts -O dtb -o "$DESTDIR/boot/overlays/pivccu-raspberrypi.dtbo" \
+          "$SRCROOT/dts/pivccu-raspberrypi.dts"
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+  pipeline:
+    - runs: |
+        # Test that source files exist
+        test -f /usr/src/pivccu-0_git20250117/generic_raw_uart.c
+        test -f /usr/src/pivccu-0_git20250117/eq3_char_loop.c
+        test -f /usr/src/pivccu-0_git20250117/pl011_raw_uart.c
+        test -f /usr/src/pivccu-0_git20250117/rpi_rf_mod_led.c
+        test -f /usr/src/pivccu-0_git20250117/Makefile
+        test -f /usr/src/pivccu-0_git20250117/AKMBUILD
+
+        # Test AKMBUILD format
+        grep -q "modname=pivccu" /usr/src/pivccu-0_git20250117/AKMBUILD
+        grep -q "built_modules=" /usr/src/pivccu-0_git20250117/AKMBUILD
+
+        # Test modules-load.d config
+        test -f /etc/modules-load.d/pivccu.conf
+        grep -q "generic_raw_uart" /etc/modules-load.d/pivccu.conf
+
+        # Test device tree overlay exists
+        test -f /boot/overlays/pivccu-raspberrypi.dtbo
+
+        # Verify no_llseek patch was applied (class_create is handled by header)
+        ! grep -q "no_llseek" /usr/src/pivccu-0_git20250117/generic_raw_uart.c
+
+        echo "All tests passed!"

@@ -1,0 +1,16 @@
+# AKMBUILD for piVCCU kernel modules
+# Provides HomeMatic RF hardware support (RPI-RF-MOD / HM-MOD-RPI-PCB)
+
+# Name of the module package
+modname=pivccu
+
+# Version of the module (replaced during package build)
+modver=@VERSION@
+
+# Space-separated list of built kernel objects
+built_modules='generic_raw_uart.ko eq3_char_loop.ko pl011_raw_uart.ko rpi_rf_mod_led.ko'
+
+# Build the kernel modules
+build() {
+    make ${MAKEFLAGS:-} KERNEL_DIR="$kernel_srcdir" -C "$builddir" modules
+}

@@ -30,6 +30,8 @@ apk update
 | **otbr** | OpenThread Border Router for Thread/Matter networks | x86_64, aarch64 |
 | **occu** | eQ-3 OCCU - HomeMatic CCU core components | x86_64, aarch64 |
 | **occu-java** | eQ-3 OCCU - HomeMatic IP Server (Java) | x86_64, aarch64 |
+| **pivccu-modules-rpi** | piVCCU kernel modules for HomeMatic RF (pre-built for linux-rpi, diskless compatible) | aarch64 |
+| **pivccu-modules-src** | piVCCU kernel modules source (AKMS-based, builds on install) | aarch64 |
 | **zwave-js-ui** | Z-Wave JS UI - Z-Wave Control Panel and MQTT Gateway | x86_64, aarch64 |
 | **universal-silabs-flasher** | Flash Silicon Labs radios (EmberZNet, CPC, Gecko Bootloader) | x86_64, aarch64 |
 
@@ -176,6 +178,32 @@ rc-update add occu-hmserver default
 - **Port:** 32010 (XML-RPC API)
 - **Config:** `/etc/occu/config/`
 - **Hardware:** HmIP-RFUSB (auto-detected), RPI-RF-MOD
+
+### pivccu-modules-rpi / pivccu-modules-src
+
+Kernel modules for HomeMatic RF hardware (RPI-RF-MOD, HM-MOD-RPI-PCB).
+
+**For diskless Alpine on RPi5 (recommended):**
+```sh
+apk add pivccu-modules-rpi
+rc-update add pivccu-modules boot
+```
+
+**For standard Alpine with AKMS:**
+```sh
+apk add pivccu-modules-src
+# AKMS will automatically build modules for your kernel
+```
+
+- **Modules:** `generic_raw_uart`, `eq3_char_loop`, `pl011_raw_uart`, `rpi_rf_mod_led`
+- **Devices:** `/dev/raw-uart`, `/dev/eq3loop`
+- **Device tree overlay:** `pivccu-raspberrypi` (add to `usercfg.txt`)
+
+**Setup for RPI-RF-MOD:**
+1. Install the package
+2. Add `dtoverlay=pivccu-raspberrypi` to `/media/mmcblk0p1/usercfg.txt` (or `/boot/usercfg.txt`)
+3. Reboot
+4. Verify with `ls /dev/raw-uart /dev/eq3loop`
 
 ### zwave-js-ui
 

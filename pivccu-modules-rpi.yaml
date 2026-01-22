@@ -1,0 +1,169 @@
+package:
+  name: pivccu-modules-rpi
+  version: 0_git20250117
+  epoch: 0
+  description: "piVCCU kernel modules for HomeMatic RF hardware (pre-built for linux-rpi, diskless compatible)"
+  copyright:
+    - license: GPL-2.0-only
+  dependencies:
+    runtime: []
+  target-architecture:
+    - aarch64
+  options:
+    no-depends: true
+  checks:
+    disabled:
+      - usrmerge
+  scriptlets:
+    post-install: |
+      #!/bin/sh
+      echo ""
+      echo "=== piVCCU Kernel Modules Installed ==="
+      echo ""
+      echo "Modules installed to /usr/share/pivccu-modules/"
+      echo "  - generic_raw_uart: Core raw UART framework"
+      echo "  - eq3_char_loop: eQ-3 character device loop"
+      echo "  - pl011_raw_uart: PL011 UART support (RPi)"
+      echo "  - rpi_rf_mod_led: RPI-RF-MOD LED control"
+      echo ""
+      # Copy dtbo to SD card if mounted
+      if [ -d /media/mmcblk0p1/overlays ]; then
+        cp /boot/overlays/pivccu-raspberrypi.dtbo /media/mmcblk0p1/overlays/
+        echo "Device tree overlay copied to /media/mmcblk0p1/overlays/"
+        echo "Add 'dtoverlay=pivccu-raspberrypi' to /media/mmcblk0p1/usercfg.txt"
+      else
+        echo "Device tree overlay installed to /boot/overlays/"
+        echo "For diskless boot, copy to your boot partition"
+      fi
+      echo ""
+      echo "To load modules: rc-service pivccu-modules start"
+      echo "To enable at boot: rc-update add pivccu-modules boot"
+      echo ""
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+      - ca-certificates
+      - git
+      - dtc
+      - build-base
+      - linux-rpi-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/alexreinert/piVCCU.git
+      branch: master
+      expected-commit: 8be20bf4b777bdf4cd47b25f5903c2deeeb5ae4a
+
+  - runs: |
+      DESTDIR="${{targets.destdir}}"
+      VERSION="0_git20250117"
+      SRCROOT="$(pwd)"
+
+      # Find the kernel version from linux-rpi-dev
+      KVER=$(ls /lib/modules/ | head -1)
+      echo "Building modules for kernel: $KVER"
+
+      # Prepare build directory
+      cd kernel
+
+      # Apply kernel compatibility patches
+      # Note: class_create() is already handled by generic_raw_uart.h compat macro
+
+      # Patch for Linux 6.12+: no_llseek removed, use noop_llseek
+      sed -i 's/\.llseek = no_llseek/.llseek = noop_llseek/g' generic_raw_uart.c
+      sed -i 's/\.llseek = no_llseek/.llseek = noop_llseek/g' eq3_char_loop.c
+
+      # Build the kernel modules
+      make KERNEL_DIR="/lib/modules/$KVER/build" all
+
+      # Install modules to /usr/share for diskless compatibility
+      mkdir -p "$DESTDIR/usr/share/pivccu-modules"
+      cp generic_raw_uart.ko "$DESTDIR/usr/share/pivccu-modules/"
+      cp eq3_char_loop.ko "$DESTDIR/usr/share/pivccu-modules/"
+      cp pl011_raw_uart.ko "$DESTDIR/usr/share/pivccu-modules/"
+      cp rpi_rf_mod_led.ko "$DESTDIR/usr/share/pivccu-modules/"
+
+      # Create init script for loading modules
+      mkdir -p "$DESTDIR/etc/init.d"
+      cat > "$DESTDIR/etc/init.d/pivccu-modules" << 'INITEOF'
+      #!/sbin/openrc-run
+      # piVCCU kernel modules loader for HomeMatic RF hardware
+
+      description="Load piVCCU kernel modules for HomeMatic RF hardware"
+
+      depend() {
+          before occu-rfd occu-hmserver
+      }
+
+      start() {
+          ebegin "Loading piVCCU kernel modules"
+          local moddir="/usr/share/pivccu-modules"
+
+          # Load modules in correct order
+          insmod "$moddir/generic_raw_uart.ko" 2>/dev/null
+          insmod "$moddir/eq3_char_loop.ko" 2>/dev/null
+          insmod "$moddir/pl011_raw_uart.ko" 2>/dev/null
+          insmod "$moddir/rpi_rf_mod_led.ko" 2>/dev/null
+
+          eend $?
+      }
+
+      stop() {
+          ebegin "Unloading piVCCU kernel modules"
+          rmmod rpi_rf_mod_led 2>/dev/null
+          rmmod pl011_raw_uart 2>/dev/null
+          rmmod eq3_char_loop 2>/dev/null
+          rmmod generic_raw_uart 2>/dev/null
+          eend $?
+      }
+
+      status() {
+          if lsmod | grep -q generic_raw_uart; then
+              einfo "piVCCU modules loaded"
+              return 0
+          else
+              einfo "piVCCU modules not loaded"
+              return 1
+          fi
+      }
+      INITEOF
+      sed -i 's/^      //' "$DESTDIR/etc/init.d/pivccu-modules"
+      chmod +x "$DESTDIR/etc/init.d/pivccu-modules"
+
+      # Compile and install device tree overlay
+      mkdir -p "$DESTDIR/boot/overlays"
+      dtc -@ -I dts -O dtb -o "$DESTDIR/boot/overlays/pivccu-raspberrypi.dtbo" \
+          "$SRCROOT/dts/pivccu-raspberrypi.dts"
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+  pipeline:
+    - runs: |
+        # Test that module files exist
+        test -f /usr/share/pivccu-modules/generic_raw_uart.ko
+        test -f /usr/share/pivccu-modules/eq3_char_loop.ko
+        test -f /usr/share/pivccu-modules/pl011_raw_uart.ko
+        test -f /usr/share/pivccu-modules/rpi_rf_mod_led.ko
+
+        # Test init script exists and is executable
+        test -x /etc/init.d/pivccu-modules
+        grep -q "insmod" /etc/init.d/pivccu-modules
+
+        # Test device tree overlay exists
+        test -f /boot/overlays/pivccu-raspberrypi.dtbo
+
+        echo "All tests passed!"
