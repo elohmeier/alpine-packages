@@ -1,7 +1,7 @@
 package:
   name: occu-webui
   version: 3.85.7
-  epoch: 3
+  epoch: 4
   description: "eQ-3 OCCU - HomeMatic WebUI"
   copyright:
     - license: HMSL
@@ -31,6 +31,13 @@ package:
       fi
       if [ ! -f /etc/occu/config/InterfacesList.xml ]; then
         cp /etc/occu/config_templates/InterfacesList.xml /etc/occu/config/InterfacesList.xml
+      fi
+      if [ ! -f /etc/occu/config/time.conf ]; then
+        cp /etc/occu/config_templates/time.conf /etc/occu/config/time.conf
+      fi
+      # Create empty regadom file if not exists (ReGaHss will populate it)
+      if [ ! -f /etc/occu/config/homematic.regadom ]; then
+        touch /etc/occu/config/homematic.regadom
       fi
 
       echo ""
@@ -76,11 +83,12 @@ pipeline:
       mkdir -p "$DESTDIR/etc/lighttpd"
       mkdir -p "$DESTDIR/etc/occu/config_templates"
 
-      # Copy WebUI files (use -P to not follow symlinks, -a to preserve attributes)
+      # Copy WebUI files - dereference symlinks to avoid broken /opt/hm references
       if [ -d "occu-src/WebUI/www" ]; then
         echo "Copying WebUI files..."
-        cp -a occu-src/WebUI/www/* "$DESTDIR/www/" || true
-        # Remove any broken symlinks that might have been copied
+        # First copy with -L to dereference symlinks
+        cp -rL occu-src/WebUI/www/* "$DESTDIR/www/" 2>/dev/null || true
+        # Remove any remaining broken symlinks
         find "$DESTDIR/www" -xtype l -delete 2>/dev/null || true
       else
         echo "WARNING: occu-src/WebUI/www not found"
@@ -150,6 +158,9 @@ pipeline:
       # Install InterfacesList.xml template
       install -Dm644 occu-webui/InterfacesList.xml "$DESTDIR/etc/occu/config_templates/InterfacesList.xml"
 
+      # Install time.conf template
+      install -Dm644 occu-webui/time.conf "$DESTDIR/etc/occu/config_templates/time.conf"
+
       # Create www/rega directory for ReGaHss HTTP document root
       mkdir -p "$DESTDIR/www/rega"
 
@@ -171,6 +182,10 @@ test:
         test -f /etc/occu/rega.conf
         test -f /etc/occu/config_templates/rega.conf
         test -f /etc/occu/config_templates/InterfacesList.xml
+        test -f /etc/occu/config_templates/time.conf
 
         # Test that www/rega directory exists
         test -d /www/rega
+
+        # Test no broken symlinks in /www
+        ! find /www -xtype l | grep -q .
