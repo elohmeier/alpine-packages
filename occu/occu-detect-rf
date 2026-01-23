@@ -20,11 +20,12 @@ log() {
 
 # Detect HmIP-RFUSB (USB stick)
 detect_hmip_rfusb() {
-    # Check for symlink created by udev
+    # Check for symlink created by udev - resolve to real device path
+    # (Java's nrjavaserial library doesn't handle symlinks well)
     if [ -e /dev/ttyHmIP-RFUSB ]; then
-        HMIP_DEVICE="/dev/ttyHmIP-RFUSB"
+        HMIP_DEVICE=$(readlink -f /dev/ttyHmIP-RFUSB)
         HMIP_TYPE="HMIP_CCU2"
-        log "Detected HmIP-RFUSB at $HMIP_DEVICE"
+        log "Detected HmIP-RFUSB at $HMIP_DEVICE (via symlink)"
         return 0
     fi
 

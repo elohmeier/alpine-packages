@@ -1,14 +1,14 @@
 package:
   name: occu-java
   version: 3.85.7
-  epoch: 3
+  epoch: 4
   description: "eQ-3 OCCU - HomeMatic IP Server (Java)"
   copyright:
     - license: HMSL
       license-path: occu-src/LicenseDE.txt
   dependencies:
     runtime:
-      - openjdk11-jre-headless
+      - java-jre-headless
       - occu
       - gcompat-custom
   target-architecture:

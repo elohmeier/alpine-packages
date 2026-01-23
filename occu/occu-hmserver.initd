@@ -33,15 +33,16 @@ start_pre() {
 		return 1
 	fi
 
-	# Check if Java is available
-	if ! command -v java >/dev/null 2>&1; then
-		eerror "Java not found. Please install openjdk11-jre or similar."
+	# Check if HMIPServer.jar exists (provided by occu-java package)
+	if [ ! -f /opt/HMServer/HMIPServer.jar ]; then
+		eerror "HMIPServer.jar not found. Please install occu-java package:"
+		eerror "  apk add occu-java"
 		return 1
 	fi
 
-	# Check if HMIPServer.jar exists
-	if [ ! -f /opt/HMServer/HMIPServer.jar ]; then
-		eerror "HMIPServer.jar not found at /opt/HMServer/HMIPServer.jar"
+	# Check if Java is available
+	if ! command -v java >/dev/null 2>&1; then
+		eerror "Java not found. Please install openjdk11-jre-headless or similar."
 		return 1
 	fi
 
