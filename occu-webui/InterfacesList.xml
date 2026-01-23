@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<interfaces>
+    <!-- HmIP interface - HomeMatic IP via HMIPServer -->
+    <ipc>
+        <name>HmIP-RF</name>
+        <port>32010</port>
+        <info>HmIP-RF</info>
+        <url>xmlrpc://127.0.0.1:32010</url>
+    </ipc>
+
+    <!-- Uncomment to enable BidCos-RF (classic HomeMatic) if using RFD -->
+    <!--
+    <ipc>
+        <name>BidCos-RF</name>
+        <port>2001</port>
+        <info>BidCos-RF</info>
+        <url>xmlrpc://127.0.0.1:2001</url>
+    </ipc>
+    -->
+</interfaces>

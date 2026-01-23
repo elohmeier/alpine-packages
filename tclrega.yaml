@@ -1,10 +1,10 @@
 package:
   name: tclrega
   version: 1.4
-  epoch: 0
+  epoch: 1
   description: "Tcl extension for ReGaHss communication"
   copyright:
-    - license: Apache-2.0
+    - license: LGPL-2.1-only
   dependencies:
     runtime:
       - tcl
@@ -23,24 +23,11 @@ environment:
       - busybox
       - build-base
       - tcl-dev
-      - git
 
 pipeline:
-  - uses: git-checkout
-    with:
-      repository: https://github.com/jens-maus/OpenCCU.git
-      branch: master
-      destination: openccu-src
-
   - runs: |
-      mkdir -p build
-
-      # Copy sources
-      cp openccu-src/buildroot-external/package/tclrega/tclrega.cpp build/
-      cp openccu-src/buildroot-external/package/libxmlparser/xmlParser.cpp build/
-      cp openccu-src/buildroot-external/package/libxmlparser/xmlParser.h build/
-
-      cd build
+      # Sources are bundled in tclrega/ directory (from OpenCCU project)
+      cd tclrega
 
       # Build xmlParser object (statically linked into tclrega)
       ${{host.triplet.gnu}}-g++ -c -fPIC -O2 -pipe -Wall xmlParser.cpp -o xmlParser.o
