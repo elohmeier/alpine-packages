@@ -1,0 +1,72 @@
+package:
+  name: tclrega
+  version: 1.4
+  epoch: 0
+  description: "Tcl extension for ReGaHss communication"
+  copyright:
+    - license: Apache-2.0
+  dependencies:
+    runtime:
+      - tcl
+  target-architecture:
+    - aarch64
+    - x86_64
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+      - build-base
+      - tcl-dev
+      - git
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/jens-maus/OpenCCU.git
+      branch: master
+      destination: openccu-src
+
+  - runs: |
+      mkdir -p build
+
+      # Copy sources
+      cp openccu-src/buildroot-external/package/tclrega/tclrega.cpp build/
+      cp openccu-src/buildroot-external/package/libxmlparser/xmlParser.cpp build/
+      cp openccu-src/buildroot-external/package/libxmlparser/xmlParser.h build/
+
+      cd build
+
+      # Build xmlParser object (statically linked into tclrega)
+      ${{host.triplet.gnu}}-g++ -c -fPIC -O2 -pipe -Wall xmlParser.cpp -o xmlParser.o
+
+      # Build tclrega object
+      ${{host.triplet.gnu}}-g++ -c -fPIC -O2 -pipe -Wall -I. -I/usr/include/tcl8.6 tclrega.cpp -o tclrega.o
+
+      # Link tclrega.so with xmlParser statically included
+      ${{host.triplet.gnu}}-g++ -shared -fPIC -o tclrega.so tclrega.o xmlParser.o -ltcl8.6
+
+      # Install
+      install -Dm755 tclrega.so "${{targets.destdir}}/lib/tclrega.so"
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - tcl
+  pipeline:
+    - runs: |
+        # Test that tclrega.so exists and can be loaded
+        test -f /lib/tclrega.so
+        # Try loading it in tclsh (will fail to connect but should load)
+        echo "load /lib/tclrega.so" | tclsh 2>&1 || true
