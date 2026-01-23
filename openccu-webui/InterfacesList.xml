@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="ISO-8859-1" ?>
-<interfaces>
+<interfaces v="1.0">
     <!-- HmIP interface - HomeMatic IP via HMIPServer -->
     <ipc>
         <name>HmIP-RF</name>

@@ -1,6 +1,6 @@
 package:
   name: gcompat-custom
-  version: 0_git20250117
+  version: 0_git20250123
   epoch: 0
   description: "gcompat with full fortify function support for OCCU binaries"
   copyright:
@@ -36,7 +36,7 @@ pipeline:
     with:
       repository: https://github.com/elohmeier/gcompat.git
       branch: current
-      expected-commit: f5f4486c9ff90814cc7c7cec5030b47621d135b7
+      expected-commit: 3235d2a96f857b5974c406207723ff41298e2229
       destination: gcompat-src
 
   - runs: |
@@ -89,6 +89,10 @@ test:
         - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
       keyring:
         - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - binutils
+        - busybox
+        - gcompat-custom
   pipeline:
     - runs: |
         # Test that library exists
@@ -100,5 +104,18 @@ test:
         nm -D /lib/libgcompat.so.0 | grep -q "__snprintf_chk"
         nm -D /lib/libgcompat.so.0 | grep -q "__printf_chk"
         nm -D /lib/libgcompat.so.0 | grep -q "__syslog_chk"
+
+        # Check that library exports timezone symbols
+        nm -D /lib/libgcompat.so.0 | grep -q "__timezone"
+        nm -D /lib/libgcompat.so.0 | grep -q "__daylight"
+        nm -D /lib/libgcompat.so.0 | grep -q "__tzname"
+
+        # Check that library exports arc4random functions (GLIBC 2.36+)
+        nm -D /lib/libgcompat.so.0 | grep -q "arc4random$"
+        nm -D /lib/libgcompat.so.0 | grep -q "arc4random_buf"
+        nm -D /lib/libgcompat.so.0 | grep -q "arc4random_uniform"
+
+        # Check that library exports _dl_find_object (GLIBC 2.35+)
+        nm -D /lib/libgcompat.so.0 | grep -q "_dl_find_object"
 
         echo "gcompat-custom tests passed"

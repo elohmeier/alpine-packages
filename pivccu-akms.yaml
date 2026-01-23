@@ -1,5 +1,5 @@
 package:
-  name: pivccu-modules-src
+  name: pivccu-akms
   version: 0_git20250117
   epoch: 0
   description: "piVCCU kernel modules source for HomeMatic RF hardware (AKMS)"
@@ -8,6 +8,7 @@ package:
   dependencies:
     runtime:
       - akms
+      - pivccu-detect
   target-architecture:
     - aarch64
   checks:
@@ -49,6 +50,7 @@ environment:
     packages:
       - busybox
       - ca-certificates
+      - build-base
       - git
       - dtc
 
@@ -82,8 +84,6 @@ pipeline:
 
       # Apply kernel compatibility patches
       cd "$SRC_DIR"
-
-      # Note: class_create() compatibility is handled by generic_raw_uart.h
 
       # Patch for Linux 6.12+: no_llseek removed, use noop_llseek
       sed -i 's/\.llseek = no_llseek/.llseek = noop_llseek/g' generic_raw_uart.c
@@ -122,6 +122,20 @@ pipeline:
       dtc -@ -I dts -O dtb -o "$DESTDIR/boot/overlays/pivccu-raspberrypi.dtbo" \
           "$SRCROOT/dts/pivccu-raspberrypi.dts"
 
+subpackages:
+  - name: pivccu-detect
+    description: "HomeMatic RF hardware detection tool"
+    checks:
+      disabled:
+        - usrmerge
+    pipeline:
+      - runs: |
+          cd detect_radio_module
+          # Fix musl compatibility: 'uint' is a glibc-specific typedef
+          make CXXFLAGS="-pthread -static-libstdc++ -Duint=unsigned"
+          install -Dm755 detect_radio_module "${{targets.contextdir}}"/usr/bin/detect_radio_module
+      - uses: strip
+
 test:
   environment:
     contents:
@@ -151,7 +165,7 @@ test:
         # Test device tree overlay exists
         test -f /boot/overlays/pivccu-raspberrypi.dtbo
 
-        # Verify no_llseek patch was applied (class_create is handled by header)
+        # Verify no_llseek patch was applied
         ! grep -q "no_llseek" /usr/src/pivccu-0_git20250117/generic_raw_uart.c
 
-        echo "All tests passed!"
+        echo "pivccu-akms tests passed!"

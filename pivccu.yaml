@@ -1,12 +1,13 @@
 package:
-  name: pivccu-modules-rpi
+  name: pivccu
   version: 0_git20250117
   epoch: 0
   description: "piVCCU kernel modules for HomeMatic RF hardware (pre-built for linux-rpi, diskless compatible)"
   copyright:
     - license: GPL-2.0-only
   dependencies:
-    runtime: []
+    runtime:
+      - pivccu-detect
   target-architecture:
     - aarch64
   options:
@@ -50,9 +51,9 @@ environment:
     packages:
       - busybox
       - ca-certificates
+      - build-base
       - git
       - dtc
-      - build-base
       - linux-rpi-dev
 
 pipeline:
@@ -75,8 +76,6 @@ pipeline:
       cd kernel
 
       # Apply kernel compatibility patches
-      # Note: class_create() is already handled by generic_raw_uart.h compat macro
-
       # Patch for Linux 6.12+: no_llseek removed, use noop_llseek
       sed -i 's/\.llseek = no_llseek/.llseek = noop_llseek/g' generic_raw_uart.c
       sed -i 's/\.llseek = no_llseek/.llseek = noop_llseek/g' eq3_char_loop.c
@@ -143,6 +142,20 @@ pipeline:
       dtc -@ -I dts -O dtb -o "$DESTDIR/boot/overlays/pivccu-raspberrypi.dtbo" \
           "$SRCROOT/dts/pivccu-raspberrypi.dts"
 
+subpackages:
+  - name: pivccu-detect
+    description: "HomeMatic RF hardware detection tool"
+    checks:
+      disabled:
+        - usrmerge
+    pipeline:
+      - runs: |
+          cd detect_radio_module
+          # Fix musl compatibility: 'uint' is a glibc-specific typedef
+          make CXXFLAGS="-pthread -static-libstdc++ -Duint=unsigned"
+          install -Dm755 detect_radio_module "${{targets.contextdir}}"/usr/bin/detect_radio_module
+      - uses: strip
+
 test:
   environment:
     contents:
@@ -166,4 +179,4 @@ test:
         # Test device tree overlay exists
         test -f /boot/overlays/pivccu-raspberrypi.dtbo
 
-        echo "All tests passed!"
+        echo "pivccu tests passed!"

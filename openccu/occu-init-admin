@@ -1,0 +1,41 @@
+#!/bin/sh
+# Initialize default Admin user for OCCU WebUI
+# This script is run on first start of ReGaHss
+
+REGA_URL="http://127.0.0.1:8183/tclrega.exe"
+
+# Check if ReGaHss is responding
+if ! wget -q -O /dev/null --timeout=2 "http://127.0.0.1:8183/" 2>/dev/null; then
+    echo "ReGaHss not ready, skipping Admin initialization"
+    exit 0
+fi
+
+# Check if Admin user already exists
+ADMIN_CHECK=$(wget -q -O - --timeout=5 --post-data='
+object oUser = dom.GetObject("Admin");
+if (oUser) {
+    WriteLine("EXISTS");
+} else {
+    WriteLine("MISSING");
+}
+' "$REGA_URL" 2>/dev/null | grep -o 'EXISTS\|MISSING')
+
+if [ "$ADMIN_CHECK" = "EXISTS" ]; then
+    exit 0
+fi
+
+echo "Creating default Admin user..."
+
+# Create Admin user with full permissions
+wget -q -O /dev/null --timeout=10 --post-data='
+! NoPermissionCheck
+object oUser = dom.CreateObject(OT_USER);
+oUser.Name("Admin");
+oUser.UserLevel(iulAdmin);
+oUser.Enabled(true);
+oUser.Visible(true);
+oUser.UserShowLogin(true);
+system.Save();
+' "$REGA_URL" 2>/dev/null
+
+echo "Admin user created (no password)"

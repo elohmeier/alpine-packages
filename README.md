@@ -28,10 +28,9 @@ apk update
 | **matter-server** | Open Home Foundation Matter Server - WebSocket-based Matter controller for Home Assistant | x86_64, aarch64 |
 | **chip-sdk** | Matter/CHIP SDK Python bindings | x86_64, aarch64 |
 | **otbr** | OpenThread Border Router for Thread/Matter networks | x86_64, aarch64 |
-| **occu** | eQ-3 OCCU - HomeMatic CCU core components | x86_64, aarch64 |
-| **occu-java** | eQ-3 OCCU - HomeMatic IP Server (Java) | x86_64, aarch64 |
-| **pivccu-modules-rpi** | piVCCU kernel modules for HomeMatic RF (pre-built for linux-rpi, diskless compatible) | aarch64 |
-| **pivccu-modules-src** | piVCCU kernel modules source (AKMS-based, builds on install) | aarch64 |
+| **openccu** | eQ-3 OCCU - HomeMatic CCU core components (includes openccu-tclrega, openccu-webui, openccu-java subpackages) | x86_64, aarch64 |
+| **pivccu** | piVCCU pre-built kernel modules for linux-rpi (includes pivccu-detect subpackage) | aarch64 |
+| **pivccu-akms** | piVCCU kernel modules source for AKMS (includes pivccu-detect subpackage) | aarch64 |
 | **zwave-js-ui** | Z-Wave JS UI - Z-Wave Control Panel and MQTT Gateway | x86_64, aarch64 |
 | **universal-silabs-flasher** | Flash Silicon Labs radios (EmberZNet, CPC, Gecko Bootloader) | x86_64, aarch64 |
 
@@ -70,7 +69,6 @@ apk update
 | Package | Description | Architectures |
 |---------|-------------|---------------|
 | **gcompat-custom** | glibc compatibility layer (custom build) | x86_64, aarch64 |
-| **detect-radio-module** | HomeMatic RF module detection tool | x86_64, aarch64 |
 
 ## Package Details
 
@@ -165,12 +163,16 @@ rc-update add otbr-agent default
 - **Config:** `/etc/conf.d/otbr-agent`
 - **Hardware:** Requires Thread RCP firmware (SkyConnect, Yellow, etc.)
 
-### occu / occu-java
+### openccu
 
-HomeMatic CCU components for HomeMatic IP devices.
+HomeMatic CCU components for HomeMatic IP devices. This package is consolidated from multiple sources and includes subpackages:
+- **openccu** - Core binaries (rfd, ReGaHss, multimacd), libraries, init scripts, udev rules
+- **openccu-tclrega** - Tcl extension for ReGaHss XML-RPC communication
+- **openccu-webui** - Web interface + lighttpd configuration
+- **openccu-java** - HMIPServer (Java-based HomeMatic IP server)
 
 ```sh
-apk add occu-java
+apk add openccu-java
 rc-service occu-hmserver start
 rc-update add occu-hmserver default
 ```
@@ -179,19 +181,27 @@ rc-update add occu-hmserver default
 - **Config:** `/etc/occu/config/`
 - **Hardware:** HmIP-RFUSB (auto-detected), RPI-RF-MOD
 
-### pivccu-modules-rpi / pivccu-modules-src
+### pivccu / pivccu-akms
 
-Kernel modules for HomeMatic RF hardware (RPI-RF-MOD, HM-MOD-RPI-PCB).
+HomeMatic RF hardware detection and kernel module support. Two variants available:
+
+**pivccu** - Pre-built kernel modules for linux-rpi (diskless compatible)
+- **pivccu** - Pre-built kernel modules (main package)
+- **pivccu-detect** - RF hardware detection utility (`detect_radio_module`)
+
+**pivccu-akms** - Kernel module sources for AKMS (builds on install)
+- **pivccu-akms** - Kernel module sources (main package)
+- **pivccu-detect** - RF hardware detection utility (`detect_radio_module`)
 
 **For diskless Alpine on RPi5 (recommended):**
 ```sh
-apk add pivccu-modules-rpi
+apk add pivccu
 rc-update add pivccu-modules boot
 ```
 
 **For standard Alpine with AKMS:**
 ```sh
-apk add pivccu-modules-src
+apk add pivccu-akms
 # AKMS will automatically build modules for your kernel
 ```
 
