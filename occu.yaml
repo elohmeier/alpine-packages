@@ -1,7 +1,7 @@
 package:
   name: occu
   version: 3.85.7
-  epoch: 7
+  epoch: 8
   description: "eQ-3 OCCU - HomeMatic CCU Core Components"
   copyright:
     - license: HMSL
@@ -35,6 +35,10 @@ package:
       mkdir -p /etc/config/crRFD/data
       mkdir -p /var/lib/occu/measurement
       mkdir -p /var/tmp /var/lock
+      # Directories required by ReGaHss
+      mkdir -p /etc/occu/config/rc.d
+      mkdir -p /etc/occu/config/addons/www
+      mkdir -p /etc/occu/config/userprofiles
 
       # Create /boot/VERSION for HMIPServer
       if [ ! -f /boot/VERSION ]; then
