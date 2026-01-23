@@ -1,7 +1,7 @@
 package:
   name: tclrega
   version: 1.4
-  epoch: 1
+  epoch: 2
   description: "Tcl extension for ReGaHss communication"
   copyright:
     - license: LGPL-2.1-only
@@ -30,13 +30,13 @@ pipeline:
       cd tclrega
 
       # Build xmlParser object (statically linked into tclrega)
-      ${{host.triplet.gnu}}-g++ -c -fPIC -O2 -pipe -Wall xmlParser.cpp -o xmlParser.o
+      g++ -c -fPIC -O2 -pipe -Wall xmlParser.cpp -o xmlParser.o
 
       # Build tclrega object
-      ${{host.triplet.gnu}}-g++ -c -fPIC -O2 -pipe -Wall -I. -I/usr/include/tcl8.6 tclrega.cpp -o tclrega.o
+      g++ -c -fPIC -O2 -pipe -Wall -I. -I/usr/include/tcl8.6 tclrega.cpp -o tclrega.o
 
       # Link tclrega.so with xmlParser statically included
-      ${{host.triplet.gnu}}-g++ -shared -fPIC -o tclrega.so tclrega.o xmlParser.o -ltcl8.6
+      g++ -shared -fPIC -o tclrega.so tclrega.o xmlParser.o -ltcl8.6
 
       # Install
       install -Dm755 tclrega.so "${{targets.destdir}}/lib/tclrega.so"
