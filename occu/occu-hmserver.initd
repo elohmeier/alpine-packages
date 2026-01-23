@@ -65,7 +65,8 @@ start_pre() {
 	checkpath --directory --mode 0755 /etc/config/crRFD/data
 	checkpath --directory --mode 0755 /var/lib/occu/measurement
 	checkpath --directory --mode 0755 /var/tmp
-	checkpath --directory --mode 0755 /var/lock
+	# /var/lock is typically a symlink to /run/lock on Alpine, just ensure target exists
+	mkdir -p /run/lock 2>/dev/null || true
 
 	# Create /boot/VERSION for HardwareInfo (Java class expects this)
 	if [ ! -f /boot/VERSION ]; then
