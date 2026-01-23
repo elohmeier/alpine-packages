@@ -1,7 +1,7 @@
 package:
   name: tclrega
   version: 1.4
-  epoch: 3
+  epoch: 4
   description: "Tcl extension for ReGaHss communication"
   copyright:
     - license: LGPL-2.1-only
@@ -39,8 +39,8 @@ pipeline:
       # Link tclrega.so with xmlParser statically included
       g++ -shared -fPIC -o tclrega.so tclrega.o xmlParser.o -ltcl8.6
 
-      # Install
-      install -Dm755 tclrega.so "${{targets.destdir}}/lib/tclrega.so"
+      # Install to /usr/lib per usrmerge standard
+      install -Dm755 tclrega.so "${{targets.destdir}}/usr/lib/tclrega.so"
 
 test:
   environment:
@@ -55,6 +55,6 @@ test:
   pipeline:
     - runs: |
         # Test that tclrega.so exists and can be loaded
-        test -f /lib/tclrega.so
+        test -f /usr/lib/tclrega.so
         # Try loading it in tclsh (will fail to connect but should load)
-        echo "load /lib/tclrega.so" | tclsh 2>&1 || true
+        echo "load /usr/lib/tclrega.so" | tclsh 2>&1 || true
