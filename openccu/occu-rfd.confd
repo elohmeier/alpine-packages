@@ -1,4 +1,0 @@
-# HomeMatic RFD configuration
-
-# Log level (0-5, higher = more verbose)
-RFD_LOGLEVEL="5"

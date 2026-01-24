@@ -21,18 +21,18 @@ apk update
 
 ### Smart Home
 
-| Package                      | Description                                                                                                   | Architectures   |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------- |
-| **adaptive-lighting**        | Home Assistant custom integration for adaptive lighting                                                       | x86_64, aarch64 |
-| **home-assistant-container** | Home Assistant Core - Podman container                                                                        | x86_64, aarch64 |
-| **matter-server**            | Open Home Foundation Matter Server - WebSocket-based Matter controller for Home Assistant                     | x86_64, aarch64 |
-| **chip-sdk**                 | Matter/CHIP SDK Python bindings                                                                               | x86_64, aarch64 |
-| **otbr**                     | OpenThread Border Router for Thread/Matter networks                                                           | x86_64, aarch64 |
-| **openccu**                  | eQ-3 OCCU - HomeMatic CCU core components (includes openccu-tclrega, openccu-webui, openccu-java subpackages) | x86_64, aarch64 |
-| **pivccu**                   | piVCCU pre-built kernel modules for linux-rpi (includes pivccu-detect subpackage)                             | aarch64         |
-| **pivccu-akms**              | piVCCU kernel modules source for AKMS (includes pivccu-detect subpackage)                                     | aarch64         |
-| **zwave-js-ui**              | Z-Wave JS UI - Z-Wave Control Panel and MQTT Gateway                                                          | x86_64, aarch64 |
-| **universal-silabs-flasher** | Flash Silicon Labs radios (EmberZNet, CPC, Gecko Bootloader)                                                  | x86_64, aarch64 |
+| Package                      | Description                                                                               | Architectures   |
+| ---------------------------- | ----------------------------------------------------------------------------------------- | --------------- |
+| **adaptive-lighting**        | Home Assistant custom integration for adaptive lighting                                   | x86_64, aarch64 |
+| **home-assistant-container** | Home Assistant Core - Podman container                                                    | x86_64, aarch64 |
+| **matter-server**            | Open Home Foundation Matter Server - WebSocket-based Matter controller for Home Assistant | x86_64, aarch64 |
+| **chip-sdk**                 | Matter/CHIP SDK Python bindings                                                           | x86_64, aarch64 |
+| **otbr**                     | OpenThread Border Router for Thread/Matter networks                                       | x86_64, aarch64 |
+| **openccu-container**        | OpenCCU - HomeMatic CCU running in Podman container                                       | x86_64, aarch64 |
+| **pivccu**                   | piVCCU pre-built kernel modules for linux-rpi (includes pivccu-detect subpackage)         | aarch64         |
+| **pivccu-akms**              | piVCCU kernel modules source for AKMS (includes pivccu-detect subpackage)                 | aarch64         |
+| **zwave-js-ui**              | Z-Wave JS UI - Z-Wave Control Panel and MQTT Gateway                                      | x86_64, aarch64 |
+| **universal-silabs-flasher** | Flash Silicon Labs radios (EmberZNet, CPC, Gecko Bootloader)                              | x86_64, aarch64 |
 
 ### Build Tools
 
@@ -64,12 +64,6 @@ apk update
 | ---------- | -------------------------------------------------------------------------- | --------------- |
 | **vector** | High-performance observability data pipeline for logs, metrics, and traces | x86_64, aarch64 |
 
-### Libraries
-
-| Package            | Description                              | Architectures   |
-| ------------------ | ---------------------------------------- | --------------- |
-| **gcompat-custom** | glibc compatibility layer (custom build) | x86_64, aarch64 |
-
 ## Package Details
 
 ### adaptive-lighting
@@ -99,7 +93,7 @@ rc-update add home-assistant-container default
 - **Port:** 8123 (Web UI)
 - **Config:** `/etc/conf.d/home-assistant-container`
 - **Data:** `/var/lib/homeassistant`
-- **Image:** `ghcr.io/home-assistant/home-assistant:<version>` (configurable via `HASS_IMAGE`)
+- **Image:** `ghcr.io/home-assistant/home-assistant:<version>` (configurable via `CONTAINER_IMAGE`)
 
 **What's automated on install:**
 
@@ -168,24 +162,21 @@ rc-update add otbr-agent default
 - **Config:** `/etc/conf.d/otbr-agent`
 - **Hardware:** Requires Thread RCP firmware (SkyConnect, Yellow, etc.)
 
-### openccu
+### openccu-container
 
-HomeMatic CCU components for HomeMatic IP devices. This package is consolidated from multiple sources and includes subpackages:
-
-- **openccu** - Core binaries (rfd, ReGaHss, multimacd), libraries, init scripts, udev rules
-- **openccu-tclrega** - Tcl extension for ReGaHss XML-RPC communication
-- **openccu-webui** - Web interface + lighttpd configuration
-- **openccu-java** - HMIPServer (Java-based HomeMatic IP server)
+OpenCCU (HomeMatic CCU) running in a Podman container.
 
 ```sh
-apk add openccu-java
-rc-service occu-hmserver start
-rc-update add occu-hmserver default
+apk add openccu-container
+rc-service openccu-container start
+rc-update add openccu-container default
 ```
 
-- **Port:** 32010 (XML-RPC API)
-- **Config:** `/etc/occu/config/`
-- **Hardware:** HmIP-RFUSB (auto-detected), RPI-RF-MOD
+- **Port:** 80 (Web UI, configurable via `CONTAINER_PORT`)
+- **Config:** `/etc/conf.d/openccu-container`
+- **Data:** `/var/lib/openccu`
+- **Image:** `ghcr.io/openccu/openccu:<version>` (configurable via `CONTAINER_IMAGE`)
+- **Hardware:** Requires HomeMatic kernel modules (pivccu) for RPI-RF-MOD, HmIP-RFUSB
 
 ### pivccu / pivccu-akms
 

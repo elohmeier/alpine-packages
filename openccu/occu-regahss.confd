@@ -1,4 +1,0 @@
-# HomeMatic ReGaHss configuration
-
-# Log level (0-5, higher = more verbose)
-REGA_LOGLEVEL="2"
