@@ -1,0 +1,60 @@
+package:
+  name: pivccu-detect
+  version: 0_git20250117
+  epoch: 0
+  description: "HomeMatic RF hardware detection tool"
+  copyright:
+    - license: GPL-2.0-only
+  target-architecture:
+    - aarch64
+  checks:
+    disabled:
+      - usrmerge
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+      - ca-certificates
+      - build-base
+      - git
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/alexreinert/piVCCU.git
+      branch: master
+      expected-commit: 8be20bf4b777bdf4cd47b25f5903c2deeeb5ae4a
+
+  - runs: |
+      cd detect_radio_module
+      # Fix musl compatibility: 'uint' is a glibc-specific typedef
+      make CXXFLAGS="-pthread -static-libstdc++ -Duint=unsigned"
+      install -Dm755 detect_radio_module "${{targets.destdir}}"/usr/bin/detect_radio_module
+
+  - uses: strip
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+  pipeline:
+    - runs: |
+        # Test that detect_radio_module binary exists and is executable
+        test -x /usr/bin/detect_radio_module
+
+        # Test that it shows usage when run without arguments
+        detect_radio_module 2>&1 | grep -q "Usage:"
+
+        echo "pivccu-detect tests passed!"

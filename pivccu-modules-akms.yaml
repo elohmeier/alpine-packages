@@ -1,5 +1,5 @@
 package:
-  name: pivccu-akms
+  name: pivccu-modules-akms
   version: 0_git20250117
   epoch: 0
   description: "piVCCU kernel modules source for HomeMatic RF hardware (AKMS)"
@@ -27,17 +27,19 @@ package:
       echo "  - pl011_raw_uart: PL011 UART support (RPi)"
       echo "  - rpi_rf_mod_led: RPI-RF-MOD LED control"
       echo ""
+      echo "Modules will be auto-loaded via /etc/modules-load.d/pivccu.conf"
+      echo ""
       echo "Device tree overlay installed to /boot/overlays/"
       echo "Add 'dtoverlay=pivccu-raspberrypi' to usercfg.txt"
       echo ""
       # Trigger AKMS build for all installed kernels
       if command -v akms >/dev/null 2>&1; then
-        akms install pivccu 2>/dev/null || true
+        akms install pivccu-modules-akms 2>/dev/null || true
       fi
     pre-deinstall: |
       #!/bin/sh
       if command -v akms >/dev/null 2>&1; then
-        akms uninstall pivccu 2>/dev/null || true
+        akms uninstall pivccu-modules-akms 2>/dev/null || true
       fi
 
 environment:
@@ -63,8 +65,7 @@ pipeline:
 
   - runs: |
       DESTDIR="${{targets.destdir}}"
-      VERSION="0_git20250117"
-      SRC_DIR="$DESTDIR/usr/src/pivccu-${VERSION}"
+      SRC_DIR="$DESTDIR/usr/src/pivccu-modules-akms"
       SRCROOT="$(pwd)"
 
       mkdir -p "$SRC_DIR"
@@ -94,7 +95,7 @@ pipeline:
       # AKMBUILD for piVCCU kernel modules
       # Provides HomeMatic RF hardware support (RPI-RF-MOD / HM-MOD-RPI-PCB)
 
-      modname=pivccu
+      modname=pivccu-modules-akms
       modver=0_git20250117
 
       # Space-separated list of built kernel objects
@@ -122,20 +123,6 @@ pipeline:
       dtc -@ -I dts -O dtb -o "$DESTDIR/boot/overlays/pivccu-raspberrypi.dtbo" \
           "$SRCROOT/dts/pivccu-raspberrypi.dts"
 
-subpackages:
-  - name: pivccu-detect
-    description: "HomeMatic RF hardware detection tool"
-    checks:
-      disabled:
-        - usrmerge
-    pipeline:
-      - runs: |
-          cd detect_radio_module
-          # Fix musl compatibility: 'uint' is a glibc-specific typedef
-          make CXXFLAGS="-pthread -static-libstdc++ -Duint=unsigned"
-          install -Dm755 detect_radio_module "${{targets.contextdir}}"/usr/bin/detect_radio_module
-      - uses: strip
-
 test:
   environment:
     contents:
@@ -144,19 +131,25 @@ test:
         - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
       keyring:
         - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+        - akms
+        - build-base
+        - linux-virt
+        - linux-virt-dev
   pipeline:
     - runs: |
         # Test that source files exist
-        test -f /usr/src/pivccu-0_git20250117/generic_raw_uart.c
-        test -f /usr/src/pivccu-0_git20250117/eq3_char_loop.c
-        test -f /usr/src/pivccu-0_git20250117/pl011_raw_uart.c
-        test -f /usr/src/pivccu-0_git20250117/rpi_rf_mod_led.c
-        test -f /usr/src/pivccu-0_git20250117/Makefile
-        test -f /usr/src/pivccu-0_git20250117/AKMBUILD
+        test -f /usr/src/pivccu-modules-akms/generic_raw_uart.c
+        test -f /usr/src/pivccu-modules-akms/eq3_char_loop.c
+        test -f /usr/src/pivccu-modules-akms/pl011_raw_uart.c
+        test -f /usr/src/pivccu-modules-akms/rpi_rf_mod_led.c
+        test -f /usr/src/pivccu-modules-akms/Makefile
+        test -f /usr/src/pivccu-modules-akms/AKMBUILD
 
         # Test AKMBUILD format
-        grep -q "modname=pivccu" /usr/src/pivccu-0_git20250117/AKMBUILD
-        grep -q "built_modules=" /usr/src/pivccu-0_git20250117/AKMBUILD
+        grep -q "modname=pivccu-modules-akms" /usr/src/pivccu-modules-akms/AKMBUILD
+        grep -q "built_modules=" /usr/src/pivccu-modules-akms/AKMBUILD
 
         # Test modules-load.d config
         test -f /etc/modules-load.d/pivccu.conf
@@ -166,6 +159,20 @@ test:
         test -f /boot/overlays/pivccu-raspberrypi.dtbo
 
         # Verify no_llseek patch was applied
-        ! grep -q "no_llseek" /usr/src/pivccu-0_git20250117/generic_raw_uart.c
+        ! grep -q "no_llseek" /usr/src/pivccu-modules-akms/generic_raw_uart.c
 
-        echo "pivccu-akms tests passed!"
+    - runs: |
+        # Build modules using AKMS
+        echo "Building pivccu-modules-akms with AKMS..."
+        akms install pivccu-modules-akms
+
+        # Verify modules were built
+        KVER=$(ls /lib/modules/ | grep -v '^[0-9]' | head -1 || ls /lib/modules/ | head -1)
+        echo "Checking for modules in /lib/modules/$KVER/extra/"
+
+        test -f /lib/modules/$KVER/extra/generic_raw_uart.ko
+        test -f /lib/modules/$KVER/extra/eq3_char_loop.ko
+        test -f /lib/modules/$KVER/extra/pl011_raw_uart.ko
+        test -f /lib/modules/$KVER/extra/rpi_rf_mod_led.ko
+
+        echo "pivccu-modules-akms tests passed!"
