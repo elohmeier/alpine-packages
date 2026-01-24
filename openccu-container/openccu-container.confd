@@ -1,0 +1,23 @@
+# OpenCCU Container Configuration
+
+# Container image (default: version matching this package)
+#CONTAINER_IMAGE="ghcr.io/openccu/openccu:@VERSION@"
+
+# Use latest instead of pinned version:
+#CONTAINER_IMAGE="ghcr.io/openccu/openccu:latest"
+
+# Host port for web interface (default: 80)
+#CONTAINER_PORT="80"
+
+# Data directory for persistent storage (default: /var/lib/openccu)
+#CONTAINER_DATA_DIR="/var/lib/openccu"
+
+# Extra podman options (e.g., resource limits, network config)
+# Note: OpenCCU requires privileged mode and specific mounts which are
+# already configured. Add extra options here as needed.
+#
+# For HmIP-HAP / HmIPW-DRAP support, you may need macvlan networking:
+#CONTAINER_EXTRA_OPTS="--network=host"
+#
+# For CPU priority (helps with radio communication timing):
+#CONTAINER_EXTRA_OPTS="--cpu-shares=4096"

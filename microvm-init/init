@@ -110,6 +110,9 @@ if [ -e /dev/vda ]; then
 
 	# Make /home/build world writeable under /mount
 	chmod 0777 /mount/home/build
+
+	# Create /lib/modules for containers that bind-mount kernel modules
+	mkdir -p /mount/lib/modules
 fi
 
 # Setup default mountpoint for 9p shared dir

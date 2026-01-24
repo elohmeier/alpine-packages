@@ -1,0 +1,107 @@
+package:
+  name: openccu-container
+  version: 3.85.7.20251129
+  epoch: 0
+  description: "OpenCCU (Podman container) - Homematic CCU"
+  copyright:
+    - license: Apache-2.0
+  dependencies:
+    runtime:
+      - podman-container-common
+      - aardvark-dns
+      - netavark
+  target-architecture:
+    - x86_64
+    - aarch64
+  scriptlets:
+    post-install: |
+      #!/bin/sh
+      # Check if running on diskless system and auto-setup
+      if [ -d /media/mmcblk0p1 ] || [ -d /media/sda1 ] || [ -d /media/usb ]; then
+        echo "Diskless system detected. Setting up container image..."
+        . /etc/conf.d/openccu-container 2>/dev/null || true
+        setup-container-image openccu "${CONTAINER_IMAGE:-ghcr.io/openccu/openccu:@VERSION@}"
+      fi
+
+      echo ""
+      echo "=== OpenCCU Container installed ==="
+      echo ""
+      echo "Prerequisites:"
+      echo "  - Homematic kernel modules must be installed on the host"
+      echo "    (e.g., pivccu-modules-dkms for RPI-RF-MOD, HmIP-RFUSB)"
+      echo "  - eq3_char_loop module must be loaded"
+      echo ""
+      echo "Start with:"
+      echo "  rc-service openccu-container start"
+      echo "  rc-update add openccu-container default"
+      echo ""
+      echo "Web interface: http://HOST:80"
+      echo ""
+    post-upgrade: |
+      #!/bin/sh
+      # Auto-upgrade container image on diskless systems
+      if [ -d /media/mmcblk0p1 ] || [ -d /media/sda1 ] || [ -d /media/usb ]; then
+        echo "Upgrading OpenCCU container image..."
+        . /etc/conf.d/openccu-container 2>/dev/null || true
+        setup-container-image openccu "${CONTAINER_IMAGE:-ghcr.io/openccu/openccu:@VERSION@}" --upgrade
+      fi
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/edge/main
+      - https://dl-cdn.alpinelinux.org/alpine/edge/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+
+pipeline:
+  - runs: |
+      # Substitute version placeholder in scripts
+      sed -i "s/@VERSION@/${{package.version}}/g" \
+        openccu-container/openccu-container.initd \
+        openccu-container/openccu-container.confd
+
+      # Install OpenRC init script
+      install -Dm755 openccu-container/openccu-container.initd \
+        "${{targets.destdir}}"/etc/init.d/openccu-container
+
+      # Install configuration file
+      install -Dm644 openccu-container/openccu-container.confd \
+        "${{targets.destdir}}"/etc/conf.d/openccu-container
+
+      # Create data directory
+      install -dm755 "${{targets.destdir}}"/var/lib/openccu
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/edge/main
+        - https://dl-cdn.alpinelinux.org/alpine/edge/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+        - podman-container-common
+        - curl
+        - iptables
+        - openrc
+  pipeline:
+    - name: "Start openccu service"
+      uses: test/openrc-start
+      with:
+        service_name: openccu-container
+    - name: "Wait for health endpoint"
+      uses: test/http-health
+      with:
+        url: "http://localhost:80/"
+        expected: "HomeMatic"
+        timeout: "120"
+    - name: "Stop openccu service"
+      uses: test/openrc-stop
+      with:
+        service_name: openccu-container
+    - name: "Verify container stopped"
+      uses: test/podman-verify-stopped

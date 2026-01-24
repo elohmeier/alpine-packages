@@ -8,6 +8,7 @@
 
 set -e
 
+# shellcheck source=/dev/null
 . /usr/lib/podman-container/functions.sh
 
 usage() {
@@ -45,7 +46,7 @@ if [ -f "$SQUASHFS_PATH" ]; then
 fi
 
 # Check for any existing image (different version)
-OLD_SQUASHFS=$(ls "$SD_MOUNT"/${CONTAINER_NAME}-*.squashfs 2>/dev/null | head -1) || true
+OLD_SQUASHFS=$(find "$SD_MOUNT" -maxdepth 1 -name "${CONTAINER_NAME}-*.squashfs" -print -quit 2>/dev/null) || true
 
 if [ -n "$OLD_SQUASHFS" ] && [ "$UPGRADE_MODE" != "true" ]; then
     echo "Existing image found: $OLD_SQUASHFS"
@@ -88,7 +89,7 @@ mount -t tmpfs -o size=3G tmpfs "$TEMP_MOUNT"
 
 # Create Podman storage config
 mkdir -p "$TEMP_MOUNT/graphroot" "$WORKDIR/runroot"
-cat > "$WORKDIR/storage.conf" << EOF
+cat >"$WORKDIR/storage.conf" <<EOF
 [storage]
 driver = "overlay"
 graphroot = "$TEMP_MOUNT/graphroot"

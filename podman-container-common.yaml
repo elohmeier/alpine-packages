@@ -1,7 +1,7 @@
 package:
   name: podman-container-common
   version: 1.0.0
-  epoch: 0
+  epoch: 1
   description: "Shared tooling for Podman containerized services"
   copyright:
     - license: MIT

@@ -2,36 +2,31 @@
 
 . /usr/lib/podman-container/functions.sh
 
-name="home-assistant-container"
-description="Home Assistant Core (Podman container)"
+name="openccu-container"
+description="OpenCCU (Podman container) - Homematic CCU"
 
-CONTAINER_NAME="home-assistant"
-: ${CONTAINER_IMAGE:="ghcr.io/home-assistant/home-assistant:@VERSION@"}
+CONTAINER_NAME="openccu"
+: ${CONTAINER_IMAGE:="ghcr.io/openccu/openccu:@VERSION@"}
 : ${CONTAINER_EXTRA_OPTS:=""}
-: ${CONTAINER_DATA_DIR:="/var/lib/homeassistant"}
-
-# Auto-detect timezone from host
-if [ -f /etc/timezone ]; then
-    HASS_TIMEZONE=$(cat /etc/timezone)
-elif [ -L /etc/localtime ]; then
-    HASS_TIMEZONE=$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')
-else
-    HASS_TIMEZONE="UTC"
-fi
+: ${CONTAINER_PORT:="80"}
+: ${CONTAINER_DATA_DIR:="/var/lib/openccu"}
 
 depend() {
-    need net cgroups dbus bluetooth
+    need net cgroups
     after firewall
 }
 
 start_pre() {
-    checkpath -d -m 0755 -o root:root "${CONTAINER_DATA_DIR}"
-
     wait_for_podman || return 1
 
     # Mount squashfs if available (diskless mode), otherwise pull
     if ! ensure_rostore_mounted "$CONTAINER_NAME" "$CONTAINER_IMAGE"; then
         einfo "No rostore image found, will pull on first run"
+    fi
+
+    # Create data directory if it doesn't exist
+    if [ ! -d "$CONTAINER_DATA_DIR" ]; then
+        mkdir -p "$CONTAINER_DATA_DIR"
     fi
 
     # Remove any existing container
@@ -46,12 +41,13 @@ start() {
 
     CONTAINERS_STORAGE_CONF="$storage_conf" \
     podman run -d --rm --name "$CONTAINER_NAME" \
-        -v "${CONTAINER_DATA_DIR}:/config" \
-        -v /run/dbus:/run/dbus \
-        -v /var/lib/bluetooth:/var/lib/bluetooth \
-        -e "TZ=${HASS_TIMEZONE}" \
-        --network=host \
         --privileged \
+        --read-only \
+        --stop-timeout 30 \
+        -p "${CONTAINER_PORT}:80" \
+        -v "${CONTAINER_DATA_DIR}:/usr/local:rw" \
+        -v /lib/modules:/lib/modules:ro \
+        -v /run/udev/control:/run/udev/control \
         ${CONTAINER_EXTRA_OPTS} \
         "$CONTAINER_IMAGE" >/dev/null 2>&1
     eend $?

@@ -8,6 +8,7 @@ MELANGE_KEYRING_APPEND = "local-melange.rsa.pub"
 MELANGE_SIGNING_KEY = "local-melange.rsa"
 
 MELANGE_TEST_RUNNER = "qemu"
+MELANGE_TEST_DISK = "10Gi"
 MELANGE_PIPELINE_DIRS = "{{config_root}}/pipelines"
 QEMU_KERNEL_IMAGE = "{{config_root}}/kernel/{% if arch() == 'arm64' %}aarch64{% else %}{{arch()}}{% endif %}/vmlinuz"
 QEMU_KERNEL_MODULES = "{{config_root}}/kernel/{% if arch() == 'arm64' %}aarch64{% else %}{{arch()}}{% endif %}/modules/"
