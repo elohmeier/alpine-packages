@@ -21,53 +21,53 @@ apk update
 
 ### Smart Home
 
-| Package | Description | Architectures |
-|---------|-------------|---------------|
-| **adaptive-lighting** | Home Assistant custom integration for adaptive lighting | x86_64, aarch64 |
-| **home-assistant-container** | Home Assistant Core - Podman container | x86_64, aarch64 |
-| **matter-server** | Open Home Foundation Matter Server - WebSocket-based Matter controller for Home Assistant | x86_64, aarch64 |
-| **chip-sdk** | Matter/CHIP SDK Python bindings | x86_64, aarch64 |
-| **otbr** | OpenThread Border Router for Thread/Matter networks | x86_64, aarch64 |
-| **openccu** | eQ-3 OCCU - HomeMatic CCU core components (includes openccu-tclrega, openccu-webui, openccu-java subpackages) | x86_64, aarch64 |
-| **pivccu** | piVCCU pre-built kernel modules for linux-rpi (includes pivccu-detect subpackage) | aarch64 |
-| **pivccu-akms** | piVCCU kernel modules source for AKMS (includes pivccu-detect subpackage) | aarch64 |
-| **zwave-js-ui** | Z-Wave JS UI - Z-Wave Control Panel and MQTT Gateway | x86_64, aarch64 |
-| **universal-silabs-flasher** | Flash Silicon Labs radios (EmberZNet, CPC, Gecko Bootloader) | x86_64, aarch64 |
+| Package                      | Description                                                                                                   | Architectures   |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------- |
+| **adaptive-lighting**        | Home Assistant custom integration for adaptive lighting                                                       | x86_64, aarch64 |
+| **home-assistant-container** | Home Assistant Core - Podman container                                                                        | x86_64, aarch64 |
+| **matter-server**            | Open Home Foundation Matter Server - WebSocket-based Matter controller for Home Assistant                     | x86_64, aarch64 |
+| **chip-sdk**                 | Matter/CHIP SDK Python bindings                                                                               | x86_64, aarch64 |
+| **otbr**                     | OpenThread Border Router for Thread/Matter networks                                                           | x86_64, aarch64 |
+| **openccu**                  | eQ-3 OCCU - HomeMatic CCU core components (includes openccu-tclrega, openccu-webui, openccu-java subpackages) | x86_64, aarch64 |
+| **pivccu**                   | piVCCU pre-built kernel modules for linux-rpi (includes pivccu-detect subpackage)                             | aarch64         |
+| **pivccu-akms**              | piVCCU kernel modules source for AKMS (includes pivccu-detect subpackage)                                     | aarch64         |
+| **zwave-js-ui**              | Z-Wave JS UI - Z-Wave Control Panel and MQTT Gateway                                                          | x86_64, aarch64 |
+| **universal-silabs-flasher** | Flash Silicon Labs radios (EmberZNet, CPC, Gecko Bootloader)                                                  | x86_64, aarch64 |
 
 ### Build Tools
 
-| Package | Description | Architectures |
-|---------|-------------|---------------|
+| Package     | Description                                       | Architectures   |
+| ----------- | ------------------------------------------------- | --------------- |
 | **zap-cli** | ZCL Advanced Platform - code generator for Matter | x86_64, aarch64 |
 
 ### 3D Printing
 
-| Package | Description | Architectures |
-|---------|-------------|---------------|
+| Package       | Description                     | Architectures          |
+| ------------- | ------------------------------- | ---------------------- |
 | **prusalink** | PrusaLink for Prusa 3D printers | x86_64, aarch64, armhf |
 
 ### Languages
 
-| Package | Description | Architectures |
-|---------|-------------|---------------|
+| Package       | Description                                                            | Architectures   |
+| ------------- | ---------------------------------------------------------------------- | --------------- |
 | **python314** | Python 3.14 - High-level scripting language with PGO/LTO optimizations | x86_64, aarch64 |
 
 ### Utilities
 
-| Package | Description | Architectures |
-|---------|-------------|---------------|
+| Package        | Description                          | Architectures   |
+| -------------- | ------------------------------------ | --------------- |
 | **ssh-to-age** | Convert SSH Ed25519 keys to age keys | x86_64, aarch64 |
 
 ### Observability
 
-| Package | Description | Architectures |
-|---------|-------------|---------------|
+| Package    | Description                                                                | Architectures   |
+| ---------- | -------------------------------------------------------------------------- | --------------- |
 | **vector** | High-performance observability data pipeline for logs, metrics, and traces | x86_64, aarch64 |
 
 ### Libraries
 
-| Package | Description | Architectures |
-|---------|-------------|---------------|
+| Package            | Description                              | Architectures   |
+| ------------------ | ---------------------------------------- | --------------- |
 | **gcompat-custom** | glibc compatibility layer (custom build) | x86_64, aarch64 |
 
 ## Package Details
@@ -102,16 +102,19 @@ rc-update add home-assistant-container default
 - **Image:** `ghcr.io/home-assistant/home-assistant:<version>` (configurable via `HASS_IMAGE`)
 
 **What's automated on install:**
+
 - Creates `homeassistant` user with hardware access (dialout, gpio groups)
 - Enables dbus and bluetooth services
 - Sets up udev rules for Zigbee/Z-Wave USB devices (creates `/dev/zigbee`, `/dev/zwave` symlinks)
 - On diskless systems: automatically creates squashfs image on SD card
 
 **USB devices:** Zigbee and Z-Wave adapters are auto-detected. Common devices get symlinks:
+
 - `/dev/zigbee` - Silicon Labs, ConBee, TI CC2531, SMLIGHT adapters
 - `/dev/zwave` - Aeotec Z-Stick, Zooz ZST10
 
 **Container management:**
+
 ```sh
 podman logs -f home-assistant      # View logs
 podman exec -it home-assistant bash # Shell access
@@ -120,6 +123,7 @@ podman exec -it home-assistant bash # Shell access
 **Diskless systems (Alpine running from RAM):**
 
 Diskless setup is fully automated. On install, the package detects SD card mount points and:
+
 1. Pulls the container image to a tmpfs
 2. Creates a compressed squashfs on the SD card (~400MB)
 3. Enables the `home-assistant-rostore` service to mount it on boot
@@ -127,6 +131,7 @@ Diskless setup is fully automated. On install, the package detects SD card mount
 Requirements: ~3GB free RAM during initial setup, network access, SD card with ~500MB free.
 
 After install on diskless, just persist and start:
+
 ```sh
 lbu commit
 rc-service home-assistant-container start
@@ -166,6 +171,7 @@ rc-update add otbr-agent default
 ### openccu
 
 HomeMatic CCU components for HomeMatic IP devices. This package is consolidated from multiple sources and includes subpackages:
+
 - **openccu** - Core binaries (rfd, ReGaHss, multimacd), libraries, init scripts, udev rules
 - **openccu-tclrega** - Tcl extension for ReGaHss XML-RPC communication
 - **openccu-webui** - Web interface + lighttpd configuration
@@ -186,20 +192,24 @@ rc-update add occu-hmserver default
 HomeMatic RF hardware detection and kernel module support. Two variants available:
 
 **pivccu** - Pre-built kernel modules for linux-rpi (diskless compatible)
+
 - **pivccu** - Pre-built kernel modules (main package)
 - **pivccu-detect** - RF hardware detection utility (`detect_radio_module`)
 
 **pivccu-akms** - Kernel module sources for AKMS (builds on install)
+
 - **pivccu-akms** - Kernel module sources (main package)
 - **pivccu-detect** - RF hardware detection utility (`detect_radio_module`)
 
 **For diskless Alpine on RPi5 (recommended):**
+
 ```sh
 apk add pivccu
 rc-update add pivccu-modules boot
 ```
 
 **For standard Alpine with AKMS:**
+
 ```sh
 apk add pivccu-akms
 # AKMS will automatically build modules for your kernel
@@ -210,6 +220,7 @@ apk add pivccu-akms
 - **Device tree overlay:** `pivccu-raspberrypi` (add to `usercfg.txt`)
 
 **Setup for RPI-RF-MOD:**
+
 1. Install the package
 2. Add `dtoverlay=pivccu-raspberrypi` to `/media/mmcblk0p1/usercfg.txt` (or `/boot/usercfg.txt`)
 3. Reboot

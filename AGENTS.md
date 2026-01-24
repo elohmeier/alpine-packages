@@ -102,7 +102,7 @@ Required secret: `ABUILD_PRIVKEY` (RSA signing key)
      name: <package>
      version: "1.0.0"
      epoch: 0
-     target-architecture:    # Required - specify all target architectures
+     target-architecture: # Required - specify all target architectures
        - x86_64
        - aarch64
    ```
@@ -110,6 +110,7 @@ Required secret: `ABUILD_PRIVKEY` (RSA signing key)
 3. **Update `README.md`** - add package to the appropriate category table.
 
 That's it. The workflow automatically:
+
 - Discovers new packages by scanning `*.yaml` files
 - Detects dependencies from `package.dependencies.runtime` and `environment.contents.packages`
 - Computes build order using topological sort

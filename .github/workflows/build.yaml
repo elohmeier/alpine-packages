@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       rebuild_all:
-        description: 'Rebuild all packages'
+        description: "Rebuild all packages"
         type: boolean
         default: false
 
