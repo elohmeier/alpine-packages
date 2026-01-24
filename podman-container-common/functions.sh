@@ -1,3 +1,4 @@
+# shellcheck shell=ash
 # Shared functions for Podman container services
 # Source this file in init scripts: . /usr/lib/podman-container/functions.sh
 
@@ -5,6 +6,7 @@
 # ghcr.io/stefanprodan/podinfo:6.5.0 -> ghcr.io-stefanprodan-podinfo-6.5.0
 sanitize_image_ref() {
     local image="$1"
+    # shellcheck disable=SC2001
     echo "$image" | sed 's|[/:]|-|g'
 }
 
@@ -93,7 +95,7 @@ get_storage_conf() {
 
     # Only add additionalimagestores if rostore is actually mounted
     if mountpoint -q "$rostore_mount" 2>/dev/null; then
-        cat > "$conf_file" << EOF
+        cat >"$conf_file" <<EOF
 [storage]
 driver = "overlay"
 graphroot = "/var/lib/containers/storage"
@@ -103,7 +105,7 @@ runroot = "/run/containers/storage"
 additionalimagestores = ["${rostore_mount}"]
 EOF
     else
-        cat > "$conf_file" << EOF
+        cat >"$conf_file" <<EOF
 [storage]
 driver = "overlay"
 graphroot = "/var/lib/containers/storage"

@@ -1,0 +1,25 @@
+repos:
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        args: ["-x"]
+        types: [shell]
+        files: \.(sh|initd)$
+
+  - repo: https://github.com/scop/pre-commit-shfmt
+    rev: v3.10.0-1
+    hooks:
+      - id: shfmt
+        types: [shell]
+        files: \.(sh|initd|confd)$
+        args: ["-i", "4", "-ci", "-bn", "-w"]
+
+  - repo: local
+    hooks:
+      - id: dprint
+        name: dprint
+        entry: dprint fmt
+        language: system
+        types_or: [json, yaml, toml, markdown]
+        pass_filenames: true

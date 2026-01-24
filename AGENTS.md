@@ -264,15 +264,15 @@ Use composable test pipelines for integration testing. Pipelines can be chained 
 
 **Available test pipelines:**
 
-| Pipeline                    | Description                                   | Needs                   |
-| --------------------------- | --------------------------------------------- | ----------------------- |
-| `test/openrc-start`         | Start an OpenRC service                       | `openrc`                |
-| `test/openrc-stop`          | Stop an OpenRC service                        | `openrc`                |
-| `test/podman-verify-stopped`| Verify Podman containers are stopped          | none                    |
-| `test/http-health`          | Wait for HTTP endpoint                        | `curl`                  |
-| `test/dbus`                 | Start D-Bus service (creates messagebus user) | `dbus`, `dbus-openrc`   |
-| `test/bluetooth`            | Start Bluetooth service (requires dbus first) | `bluez`, `bluez-openrc` |
-| `test/debug`                | Pause execution for debugging (see below)     | none                    |
+| Pipeline                     | Description                                   | Needs                   |
+| ---------------------------- | --------------------------------------------- | ----------------------- |
+| `test/openrc-start`          | Start an OpenRC service                       | `openrc`                |
+| `test/openrc-stop`           | Stop an OpenRC service                        | `openrc`                |
+| `test/podman-verify-stopped` | Verify Podman containers are stopped          | none                    |
+| `test/http-health`           | Wait for HTTP endpoint                        | `curl`                  |
+| `test/dbus`                  | Start D-Bus service (creates messagebus user) | `dbus`, `dbus-openrc`   |
+| `test/bluetooth`             | Start Bluetooth service (requires dbus first) | `bluez`, `bluez-openrc` |
+| `test/debug`                 | Pause execution for debugging (see below)     | none                    |
 
 **Basic example (container service):**
 
