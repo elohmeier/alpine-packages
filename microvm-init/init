@@ -242,22 +242,26 @@ mkdir -p -m 0700 /root/.ssh/
 echo "${SSHKEY}" > /root/.ssh/authorized_keys
 chmod 0400 /root/.ssh/authorized_keys
 
-# Setup base passwd/group with root user
-echo "root:x:0:0:root:/root:/bin/sh" > /etc/passwd
-echo "root:x:0:root" > /etc/group
-
-# Copy the user/group files from the guest filesystem to the host
-# and make sure that all the users that have /bin/sh as their shell
-# have their home directory created and the ssh key copied there.
+# Merge guest users/groups into host (alpine-baselayout-data provides base files)
+# This allows SSH login as guest users
 if [ -f /mount/etc/passwd ]; then
-	# Append guest users (skip root if it exists)
-	grep -v "^root:" /mount/etc/passwd >> /etc/passwd 2>/dev/null || :
+	while IFS=: read -r name _ uid _ _ home shell; do
+		# Skip if user already exists in host
+		grep -q "^${name}:" /etc/passwd && continue
+		# Append guest user
+		grep "^${name}:" /mount/etc/passwd >> /etc/passwd 2>/dev/null || :
+	done < /mount/etc/passwd
 fi
 if [ -f /mount/etc/group ]; then
-	grep -v "^root:" /mount/etc/group >> /etc/group 2>/dev/null || :
+	while IFS=: read -r name _ gid _; do
+		# Skip if group already exists in host
+		grep -q "^${name}:" /etc/group && continue
+		# Append guest group
+		grep "^${name}:" /mount/etc/group >> /etc/group 2>/dev/null || :
+	done < /mount/etc/group
 fi
 
-# Ensure sshd user exists for privilege separation
+# Ensure sshd user/group exists for privilege separation
 if ! grep -q "^sshd:" /etc/passwd; then
 	echo "sshd:x:22:22:sshd:/var/empty:/sbin/nologin" >> /etc/passwd
 fi
