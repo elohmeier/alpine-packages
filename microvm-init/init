@@ -137,6 +137,47 @@ mount --bind /mount/dev/pts/ptmx /mount/dev/ptmx
 # Tell software that we're acting more like a container than a full VM
 touch /mount/.dockerenv
 
+#########################
+# OPENRC INITIALIZATION #
+#########################
+
+# Initialize OpenRC environment if openrc is installed in the guest
+if [ -x /mount/sbin/openrc ] || [ -d /mount/etc/init.d ]; then
+	echo "[INIT] Initializing OpenRC environment..." > /dev/console
+
+	# Create OpenRC runtime directories
+	mkdir -p /mount/run/openrc/started /mount/run/openrc/starting /mount/run/openrc/inactive
+	touch /mount/run/openrc/softlevel
+
+	# Configure OpenRC for container/VM environment
+	cat > /mount/etc/rc.conf << 'EOF'
+rc_sys="docker"
+rc_controller_cgroups="YES"
+rc_depend_strict="NO"
+rc_provide="loopback net"
+EOF
+
+	# Ensure fstab exists
+	touch /mount/etc/fstab
+
+	# Setup network interfaces config
+	mkdir -p /mount/etc/network
+	cat > /mount/etc/network/interfaces << 'EOF'
+auto lo
+iface lo inet loopback
+EOF
+
+	# Ensure runlevels directory exists
+	mkdir -p /mount/etc/runlevels/default
+
+	# Mark required services as "started" so dependencies are satisfied
+	for svc in cgroups net networking localmount hostname loopback; do
+		touch /mount/run/openrc/started/$svc
+	done
+
+	echo "[INIT] OpenRC environment initialized" > /dev/console
+fi
+
 # Set default hard limit of open file descriptors to match systemd init
 # behavior. The pam_limit module uses the settings in /proc/1/limit as
 # its default values.

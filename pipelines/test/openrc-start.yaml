@@ -1,0 +1,79 @@
+name: Start OpenRC service
+
+description: |
+  Starts an OpenRC service.
+  Automatically initializes OpenRC environment if not already done.
+
+  USE THIS PIPELINE WHEN:
+  - You need to start any OpenRC service for testing
+
+  EXAMPLES:
+
+  Example 1 - Simple service:
+    - uses: test/openrc-start
+      with:
+        service_name: nginx
+
+  Example 2 - Container service:
+    - uses: test/openrc-start
+      with:
+        service_name: podinfo-container
+
+needs:
+  packages:
+    - openrc
+
+inputs:
+  service_name:
+    description: |
+      The OpenRC service name (e.g., "nginx", "podinfo-container").
+      This is the name used with rc-service commands.
+    required: true
+
+pipeline:
+  - name: "Start OpenRC service"
+    runs: |
+      set -e
+
+      info() { echo "==> $*"; }
+      fail() { echo "ERROR: $*" >&2; exit 1; }
+
+      SERVICE_NAME="${{inputs.service_name}}"
+
+      # Initialize OpenRC environment if not already done
+      if [ ! -f /run/openrc/softlevel ]; then
+        info "Initializing OpenRC environment..."
+        mkdir -p /run/openrc
+        touch /run/openrc/softlevel
+
+        cat > /etc/rc.conf << 'EOF'
+      rc_sys="docker"
+      rc_controller_cgroups="YES"
+      rc_depend_strict="NO"
+      rc_provide="loopback net"
+      EOF
+
+        touch /etc/fstab
+
+        mkdir -p /etc/network
+        cat > /etc/network/interfaces << 'EOF'
+      auto lo
+      iface lo inet loopback
+      EOF
+
+        mkdir -p /etc/runlevels/default
+
+        # Mark required services as "started" so dependencies are satisfied
+        mkdir -p /run/openrc/started /run/openrc/starting /run/openrc/inactive
+        for svc in cgroups net networking localmount hostname loopback; do
+          touch /run/openrc/started/$svc
+        done
+      fi
+
+      # Start the service
+      info "Starting service: $SERVICE_NAME"
+      if ! rc-service "$SERVICE_NAME" start; then
+        fail "Failed to start service: $SERVICE_NAME"
+      fi
+
+      info "Service $SERVICE_NAME started successfully"

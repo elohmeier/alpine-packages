@@ -109,15 +109,15 @@ test:
         - iptables
         - openrc
   pipeline:
-    - uses: test/openrc-init
     - uses: test/dbus
     - uses: test/bluetooth
+    - name: "Setup Home Assistant directories"
+      runs: |
+        mkdir -p /var/lib/homeassistant
     - name: "Start Home Assistant service"
-      uses: test/podman-start
+      uses: test/openrc-start
       with:
         service_name: home-assistant-container
-        setup: |
-          mkdir -p /var/lib/homeassistant
     - name: "Wait for Home Assistant"
       uses: test/http-health
       with:
@@ -125,7 +125,8 @@ test:
         expected: "Home Assistant"
         timeout: "120"
     - name: "Stop Home Assistant service"
-      uses: test/podman-stop
+      uses: test/openrc-stop
       with:
         service_name: home-assistant-container
-        verify_container: home-assistant
+    - name: "Verify container stopped"
+      uses: test/podman-verify-stopped

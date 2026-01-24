@@ -1,79 +1,54 @@
-name: Debug pause
+name: Debug shell
 
 description: |
-  Pauses test execution indefinitely for debugging.
+  Drops into an interactive shell for debugging.
 
-  Use this pipeline to inspect the test environment, debug services, or access
-  running containers via SSH port forwarding.
+  REQUIRES: melange test --interactive --debug-runner <package>.yaml
 
-  IMPORTANT: Run melange test with --interactive and --debug-runner flags:
-    melange test --interactive --debug-runner <package>.yaml
+  This pipeline immediately triggers the interactive debugger, giving you
+  a shell inside the test VM where you can:
+  - Inspect the environment
+  - Debug services (rc-service, podman, etc.)
+  - Access running containers
+  - Use SSH port forwarding from another terminal
 
-  While paused, you can:
-  1. SSH into the VM (credentials shown in output)
-  2. Use SSH port forwarding to access services:
-     ssh -L 8123:localhost:8123 build@localhost -p <ssh-port>
-  3. Inspect logs, run commands, debug issues
+  Type 'exit 0' in the shell to continue the test pipeline.
+  Type 'exit 1' to abort the test.
 
-  Press Ctrl+C in the melange process to abort, or create /tmp/debug-continue
-  inside the VM to continue execution.
-
-  Example usage in test pipeline:
+  Example usage:
     pipeline:
-      - uses: test/openrc-init
-      - uses: test/dbus
-      - uses: test/podman-container
+      - uses: test/openrc-start
         with:
           service_name: myapp-container
-          container_image: "ghcr.io/myorg/myapp:1.0"
-          health_endpoint: "http://localhost:8080/health"
-          expected_response: "OK"
-      - uses: test/debug  # Pause here to inspect running container
+      - uses: test/debug  # Drop into shell to inspect
+      - uses: test/openrc-stop
+        with:
+          service_name: myapp-container
 
 pipeline:
-  - name: "Debug pause"
+  - name: "Drop into debug shell"
     runs: |
       echo ""
       echo "=============================================="
-      echo "  DEBUG PAUSE - Test execution paused"
+      echo "  ENTERING DEBUG MODE"
       echo "=============================================="
       echo ""
-      echo "NOTE: For SSH access, you must run melange with:"
-      echo "  melange test --interactive --debug-runner <package>.yaml"
+      echo "You will now get an interactive shell."
       echo ""
-      echo "Without --interactive, SSH access is not available."
-      echo "Press Ctrl+C and re-run with the flags above."
+      echo "  - Type 'exit 0' to continue the test pipeline"
+      echo "  - Type 'exit 1' to abort"
       echo ""
-      echo "WITH --interactive, you can:"
-      echo "  - SSH will be available (melange prints the command)"
-      echo "  - Use port forwarding: ssh -L 8123:localhost:8123 ..."
-      echo "  - On test failure, you get an interactive shell"
-      echo ""
-      echo "USEFUL COMMANDS inside the VM:"
+      echo "Useful commands:"
       echo "  rc-service <name> status    # Check service status"
       echo "  podman ps -a                # List containers"
       echo "  podman logs <container>     # View container logs"
       echo "  curl localhost:<port>       # Test endpoints"
       echo ""
-      echo "TO GET SSH ACCESS (recommended):"
-      echo "  Press Ctrl+C in melange - this triggers interactive mode with SSH"
+      echo "SSH port forwarding (from another terminal):"
+      echo "  ssh -L <local>:localhost:<remote> root@localhost -p <ssh-port>"
       echo ""
-      echo "TO CONTINUE TEST:"
-      echo "  touch /tmp/debug-continue"
+      echo "  Example for a service on port 9898:"
+      echo "  ssh -L 9898:localhost:9898 root@localhost -p <ssh-port>"
+      echo "  Then open http://localhost:9898 in your browser"
       echo ""
-      echo "TO CONTINUE WITH INTERACTIVE SHELL:"
-      echo "  touch /tmp/debug-continue /tmp/debug-fail"
-      echo ""
-      echo "Waiting... (touch /tmp/debug-continue to proceed)"
-      echo ""
-
-      while [ ! -f /tmp/debug-continue ]; do
-        sleep 5
-      done
-
-      if [ -f /tmp/debug-fail ]; then
-        echo "Debug fail file found, triggering interactive debugger..."
-        exit 1
-      fi
-
-      echo "Debug continue file found, resuming execution..."
+      exit 1

@@ -82,7 +82,7 @@ test:
         - openrc
   pipeline:
     - name: "Start podinfo service"
-      uses: test/podman-start
+      uses: test/openrc-start
       with:
         service_name: podinfo-container
     - name: "Wait for health endpoint"
@@ -100,7 +100,8 @@ test:
         echo "Root endpoint contains 'podinfo': OK"
     # - uses: test/debug
     - name: "Stop podinfo service"
-      uses: test/podman-stop
+      uses: test/openrc-stop
       with:
         service_name: podinfo-container
-        verify_container: podinfo
+    - name: "Verify container stopped"
+      uses: test/podman-verify-stopped

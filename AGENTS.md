@@ -264,15 +264,15 @@ Use composable test pipelines for integration testing. Pipelines can be chained 
 
 **Available test pipelines:**
 
-| Pipeline            | Description                                   | Needs                   |
-| ------------------- | --------------------------------------------- | ----------------------- |
-| `test/openrc-init`  | Initialize OpenRC environment                 | `openrc`                |
-| `test/podman-start` | Start a Podman container service              | `openrc`                |
-| `test/podman-stop`  | Stop a Podman container service               | `openrc`                |
-| `test/http-health`  | Wait for HTTP endpoint                        | `curl`                  |
-| `test/dbus`         | Start D-Bus service (creates messagebus user) | `dbus`, `dbus-openrc`   |
-| `test/bluetooth`    | Start Bluetooth service (requires dbus first) | `bluez`, `bluez-openrc` |
-| `test/debug`        | Pause execution for debugging (see below)     | none                    |
+| Pipeline                    | Description                                   | Needs                   |
+| --------------------------- | --------------------------------------------- | ----------------------- |
+| `test/openrc-start`         | Start an OpenRC service                       | `openrc`                |
+| `test/openrc-stop`          | Stop an OpenRC service                        | `openrc`                |
+| `test/podman-verify-stopped`| Verify Podman containers are stopped          | none                    |
+| `test/http-health`          | Wait for HTTP endpoint                        | `curl`                  |
+| `test/dbus`                 | Start D-Bus service (creates messagebus user) | `dbus`, `dbus-openrc`   |
+| `test/bluetooth`            | Start Bluetooth service (requires dbus first) | `bluez`, `bluez-openrc` |
+| `test/debug`                | Pause execution for debugging (see below)     | none                    |
 
 **Basic example (container service):**
 
@@ -287,17 +287,19 @@ test:
         - iptables
         - openrc
   pipeline:
-    - uses: test/podman-start
+    - uses: test/openrc-start
       with:
         service_name: myapp-container
     - uses: test/http-health
       with:
         url: "http://localhost:8080/health"
         expected: "OK"
-    - uses: test/podman-stop
+    - uses: test/openrc-stop
       with:
         service_name: myapp-container
-        verify_container: myapp
+    - uses: test/podman-verify-stopped
+      with:
+        container_name: myapp
 ```
 
 **Example with debugging (container keeps running):**
@@ -305,7 +307,7 @@ test:
 ```yaml
 test:
   pipeline:
-    - uses: test/podman-start
+    - uses: test/openrc-start
       with:
         service_name: podinfo-container
     - uses: test/http-health
@@ -316,10 +318,12 @@ test:
       runs: |
         curl -s http://localhost:9898/ | grep -q "podinfo"
     - uses: test/debug # Debug while container still runs
-    - uses: test/podman-stop
+    - uses: test/openrc-stop
       with:
         service_name: podinfo-container
-        verify_container: podinfo
+    - uses: test/podman-verify-stopped
+      with:
+        container_name: podinfo
 ```
 
 **Advanced example (container requiring dbus/bluetooth):**
@@ -335,32 +339,46 @@ test:
         - iptables
         - openrc
   pipeline:
-    - uses: test/openrc-init
     - uses: test/dbus
     - uses: test/bluetooth
-    - uses: test/podman-start
+    - name: "Setup directories"
+      runs: |
+        mkdir -p /var/lib/homeassistant
+    - uses: test/openrc-start
       with:
         service_name: home-assistant-container
-        setup: |
-          mkdir -p /var/lib/homeassistant
     - uses: test/http-health
       with:
         url: "http://localhost:8123/manifest.json"
         expected: "Home Assistant"
         timeout: "120"
-    - uses: test/podman-stop
+    - uses: test/openrc-stop
       with:
         service_name: home-assistant-container
+    - uses: test/podman-verify-stopped
+      with:
+        container_name: home-assistant
 ```
 
 **Pipeline parameters:**
 
-`test/podman-start`:
+`test/openrc-start`:
 
 | Parameter      | Required | Description                                       |
 | -------------- | -------- | ------------------------------------------------- |
 | `service_name` | Yes      | OpenRC service name (e.g., `"podinfo-container"`) |
-| `setup`        | No       | Commands to run before starting service           |
+
+`test/openrc-stop`:
+
+| Parameter      | Required | Description                 |
+| -------------- | -------- | --------------------------- |
+| `service_name` | Yes      | OpenRC service name to stop |
+
+`test/podman-verify-stopped`:
+
+| Parameter        | Required | Description                                        |
+| ---------------- | -------- | -------------------------------------------------- |
+| `container_name` | No       | Container name to verify (verifies all if omitted) |
 
 `test/http-health`:
 
@@ -370,17 +388,10 @@ test:
 | `expected` | Yes      | String to match in response (e.g., `"OK"`)           |
 | `timeout`  | No       | Timeout in seconds (default: `"60"`)                 |
 
-`test/podman-stop`:
-
-| Parameter          | Required | Description                         |
-| ------------------ | -------- | ----------------------------------- |
-| `service_name`     | Yes      | OpenRC service name to stop         |
-| `verify_container` | No       | Container name to verify is stopped |
-
 **Notes:**
 
-- `test/podman-start` initializes OpenRC automatically if not already done
-- When using service pipelines (dbus, bluetooth), run `test/openrc-init` first
+- OpenRC environment is automatically initialized by microvm-init when OpenRC is installed
+- `test/openrc-start` also initializes OpenRC if not already done
 - Service pipelines mark services as started for OpenRC dependency tracking
 
 ### Debugging Tests
@@ -395,7 +406,7 @@ Add the debug pipeline between health check and stop to debug a running containe
 
 ```yaml
 pipeline:
-  - uses: test/podman-start
+  - uses: test/openrc-start
     with:
       service_name: myapp-container
   - uses: test/http-health
@@ -403,7 +414,7 @@ pipeline:
       url: "http://localhost:8080/health"
       expected: "OK"
   - uses: test/debug # Pauses here - container still running
-  - uses: test/podman-stop
+  - uses: test/openrc-stop
     with:
       service_name: myapp-container
 ```

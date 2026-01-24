@@ -1,0 +1,47 @@
+name: Stop OpenRC service
+
+description: |
+  Stops an OpenRC service.
+
+  USE THIS PIPELINE WHEN:
+  - You need to stop any OpenRC service after testing
+
+  EXAMPLES:
+
+  Example 1 - Simple service stop:
+    - uses: test/openrc-stop
+      with:
+        service_name: nginx
+
+needs:
+  packages:
+    - openrc
+
+inputs:
+  service_name:
+    description: |
+      The OpenRC service name to stop (e.g., "nginx", "podinfo-container").
+      This is the name used with rc-service commands.
+    required: true
+
+pipeline:
+  - name: "Stop OpenRC service"
+    runs: |
+      set -e
+
+      info() { echo "==> $*"; }
+      fail() { echo "ERROR: $*" >&2; exit 1; }
+
+      SERVICE_NAME="${{inputs.service_name}}"
+
+      # Check service status before stopping
+      info "Current service status:"
+      rc-service "$SERVICE_NAME" status || true
+
+      # Stop the service
+      info "Stopping service: $SERVICE_NAME"
+      if ! rc-service "$SERVICE_NAME" stop; then
+        fail "Failed to stop service: $SERVICE_NAME"
+      fi
+
+      info "Service $SERVICE_NAME stopped successfully"

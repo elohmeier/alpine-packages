@@ -1,0 +1,70 @@
+name: Verify Podman containers stopped
+
+description: |
+  Verifies that Podman containers are not running.
+  By default checks that all containers are stopped.
+  Optionally checks a specific container.
+
+  USE THIS PIPELINE WHEN:
+  - You need to verify containers stopped after service stop
+  - You want to ensure cleanup was successful
+
+  EXAMPLES:
+
+  Example 1 - Verify all containers stopped:
+    - uses: test/podman-verify-stopped
+
+  Example 2 - Verify specific container stopped:
+    - uses: test/podman-verify-stopped
+      with:
+        container_name: podinfo
+
+inputs:
+  container_name:
+    description: |
+      Optional container name to verify is stopped.
+      If not specified, verifies all containers are stopped.
+      Example: "podinfo" (for service "podinfo-container")
+    required: false
+
+pipeline:
+  - name: "Verify containers stopped"
+    runs: |
+      set -e
+
+      info() { echo "==> $*"; }
+      fail() { echo "ERROR: $*" >&2; exit 1; }
+
+      if ! command -v podman >/dev/null 2>&1; then
+        info "Podman not available, skipping container verification"
+        exit 0
+      fi
+
+      TMPD=$(mktemp -d)
+      trap "rm -rf '$TMPD'" EXIT
+
+      cat > "$TMPD/container_input" <<'MELANGE_CONTAINER_EOF'
+      ${{inputs.container_name}}
+      MELANGE_CONTAINER_EOF
+      CONTAINER_NAME=$(cat "$TMPD/container_input")
+
+      sleep 2
+
+      if [ -n "$CONTAINER_NAME" ]; then
+        info "Verifying container '$CONTAINER_NAME' is stopped..."
+        if podman ps --format "{{.Names}}" | grep -q "^${CONTAINER_NAME}$"; then
+          info "Container status:"
+          podman ps -a 2>&1 || true
+          fail "Container '$CONTAINER_NAME' still running"
+        fi
+        info "Container '$CONTAINER_NAME' is stopped"
+      else
+        info "Verifying all containers are stopped..."
+        RUNNING=$(podman ps --format "{{.Names}}" 2>/dev/null || true)
+        if [ -n "$RUNNING" ]; then
+          info "Container status:"
+          podman ps -a 2>&1 || true
+          fail "Containers still running: $RUNNING"
+        fi
+        info "All containers are stopped"
+      fi
