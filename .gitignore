@@ -9,3 +9,7 @@ melange-cache/
 *.rsa
 *.rsa.pub
 .test-cache/
+
+# qemu test runner
+kernel/
+/*.img

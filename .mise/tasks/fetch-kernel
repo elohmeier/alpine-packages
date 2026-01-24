@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+#MISE description="Fetch Alpine linux-virt kernel for QEMU testing"
+set -euo pipefail
+
+ARCH="${1:-$(uname -m)}"
+if [[ "$ARCH" == "arm64" ]]; then
+  ARCH="aarch64"
+fi
+
+QEMU_KERNEL_REPO="https://dl-cdn.alpinelinux.org/alpine/edge/main"
+KERNEL_DIR="kernel/$ARCH"
+
+echo "Fetching kernel for $ARCH..."
+
+# Clean existing kernel
+rm -rf "$KERNEL_DIR"
+mkdir -p "$KERNEL_DIR"
+
+# Download and extract APKINDEX
+echo "Downloading APKINDEX..."
+curl --fail -LS --silent -o "$KERNEL_DIR/APKINDEX.tar.gz" "$QEMU_KERNEL_REPO/$ARCH/APKINDEX.tar.gz"
+tar -x -C "$KERNEL_DIR" --to-stdout -f "$KERNEL_DIR/APKINDEX.tar.gz" APKINDEX > "$KERNEL_DIR/APKINDEX"
+
+# Find latest linux-virt version
+echo "Finding latest linux-virt version..."
+awk '/^P:linux-virt$/ {print; getline; print}' "$KERNEL_DIR/APKINDEX" > "$KERNEL_DIR/available"
+VERSION=$(grep '^V:' "$KERNEL_DIR/available" | sed 's/V://' | sort -V | tail -n1)
+
+# Sanity check version format
+if ! echo "$VERSION" | grep -qE '^([0-9]+\.)+[0-9]+-r[0-9]+$'; then
+  echo "Error: Invalid version format: $VERSION"
+  exit 1
+fi
+
+echo "Found version: $VERSION"
+
+# Download kernel package
+echo "Downloading linux-virt-$VERSION.apk..."
+curl --fail -LS --silent -o "$KERNEL_DIR/linux.apk" "$QEMU_KERNEL_REPO/$ARCH/linux-virt-$VERSION.apk"
+
+# Extract vmlinuz and modules
+echo "Extracting kernel..."
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+tar -x -C "$tmpdir" -f "$KERNEL_DIR/linux.apk" 2>/dev/null || true
+mv "$tmpdir"/boot/vmlinuz* "$KERNEL_DIR/vmlinuz"
+mv "$tmpdir"/lib/modules "$KERNEL_DIR/"
+
+echo "Kernel fetched successfully:"
+echo "  vmlinuz: $KERNEL_DIR/vmlinuz"
+echo "  modules: $KERNEL_DIR/modules/"

@@ -77,6 +77,9 @@ test:
       packages:
         - busybox
         - podman-container-common
+        - curl
+        - iptables
+        - openrc
   pipeline:
     - runs: |
         # Test init script exists and is executable
@@ -87,3 +90,279 @@ test:
     - runs: |
         # Test init script sources functions correctly
         grep -q '. /usr/lib/podman-container/functions.sh' /etc/init.d/podinfo-container
+    - runs: |
+        # Test version substitution worked
+        grep -q 'ghcr.io/stefanprodan/podinfo:${{package.version}}' /etc/init.d/podinfo-container
+    - runs: |
+        # Verify podman is installed
+        podman --version
+    - runs: |
+        # Verify functions.sh is available and works
+        . /usr/lib/podman-container/functions.sh
+        # Test sanitize_image_ref
+        result=$(sanitize_image_ref "ghcr.io/stefanprodan/podinfo:${{package.version}}")
+        expected="ghcr.io-stefanprodan-podinfo-${{package.version}}"
+        [ "$result" = "$expected" ] || {
+          echo "sanitize_image_ref failed: expected '$expected', got '$result'"
+          exit 1
+        }
+        echo "sanitize_image_ref: OK"
+        # Test get_rostore_mount
+        result=$(get_rostore_mount "ghcr.io/stefanprodan/podinfo:${{package.version}}")
+        expected="/var/lib/containers/rostore/ghcr.io-stefanprodan-podinfo-${{package.version}}"
+        [ "$result" = "$expected" ] || {
+          echo "get_rostore_mount failed: expected '$expected', got '$result'"
+          exit 1
+        }
+        echo "get_rostore_mount: OK"
+    - name: "Integration test - run podinfo container"
+      runs: |
+        set -e
+        CONTAINER_IMAGE="ghcr.io/stefanprodan/podinfo:${{package.version}}"
+        CONTAINER_NAME="podinfo-test"
+
+        echo "Pulling podinfo image..."
+        podman pull "$CONTAINER_IMAGE"
+
+        echo "Starting podinfo container..."
+        podman run -d --name "$CONTAINER_NAME" -p 9898:9898 "$CONTAINER_IMAGE"
+
+        echo "Waiting for container to be ready..."
+        for i in $(seq 1 30); do
+          if curl -s -f http://localhost:9898/healthz >/dev/null 2>&1; then
+            echo "Container ready after ${i}s"
+            break
+          fi
+          if [ "$i" = "30" ]; then
+            echo "Container failed to start"
+            podman logs "$CONTAINER_NAME"
+            podman rm -f "$CONTAINER_NAME" 2>/dev/null || true
+            exit 1
+          fi
+          sleep 1
+        done
+
+        echo "Testing /healthz endpoint..."
+        response=$(curl -s http://localhost:9898/healthz)
+        echo "Health response: $response"
+        echo "$response" | grep -q "OK" || {
+          echo "Health check failed: expected OK in response"
+          podman rm -f "$CONTAINER_NAME" 2>/dev/null || true
+          exit 1
+        }
+        echo "/healthz: OK"
+
+        echo "Testing / endpoint..."
+        response=$(curl -s http://localhost:9898/)
+        echo "Root response: $response"
+        echo "$response" | grep -q "podinfo" || {
+          echo "Root check failed: expected 'podinfo' in response"
+          podman rm -f "$CONTAINER_NAME" 2>/dev/null || true
+          exit 1
+        }
+        echo "/: OK"
+
+        echo "Stopping container..."
+        podman rm -f "$CONTAINER_NAME"
+
+        echo "Integration test: PASSED"
+    - name: "Rostore test - squashfs and read-only storage"
+      runs: |
+        set -e
+        . /usr/lib/podman-container/functions.sh
+
+        CONTAINER_IMAGE="ghcr.io/stefanprodan/podinfo:${{package.version}}"
+        CONTAINER_NAME="podinfo"
+
+        echo "=== Testing squashfs/rostore workflow ==="
+
+        # Create fake SD card mount point
+        SD_MOUNT="/media/mmcblk0p1"
+        mkdir -p "$SD_MOUNT"
+        echo "Created fake SD mount: $SD_MOUNT"
+
+        # Test find_sd_mount
+        found_mount=$(find_sd_mount)
+        [ "$found_mount" = "$SD_MOUNT" ] || {
+          echo "find_sd_mount failed: expected '$SD_MOUNT', got '$found_mount'"
+          exit 1
+        }
+        echo "find_sd_mount: OK"
+
+        # Test get_squashfs_path
+        squashfs_path=$(get_squashfs_path "$CONTAINER_NAME" "$CONTAINER_IMAGE" "$SD_MOUNT")
+        echo "Squashfs path: $squashfs_path"
+
+        # Create tmpfs for temporary podman storage
+        WORKDIR="/tmp/rostore-test"
+        TEMP_MOUNT="$WORKDIR/storage"
+        mkdir -p "$WORKDIR" "$TEMP_MOUNT"
+        mount -t tmpfs -o size=2G tmpfs "$TEMP_MOUNT"
+
+        # Create podman storage config for pulling
+        mkdir -p "$TEMP_MOUNT/graphroot" "$WORKDIR/runroot"
+        cat > "$WORKDIR/storage.conf" << EOF
+        [storage]
+        driver = "overlay"
+        graphroot = "$TEMP_MOUNT/graphroot"
+        runroot = "$WORKDIR/runroot"
+        EOF
+
+        echo "Pulling image to temporary storage..."
+        CONTAINERS_STORAGE_CONF="$WORKDIR/storage.conf" podman pull "$CONTAINER_IMAGE"
+
+        echo "Creating squashfs from graphroot..."
+        mksquashfs "$TEMP_MOUNT/graphroot" "$squashfs_path" -comp zstd -noappend -quiet
+
+        # Unmount temp storage
+        umount "$TEMP_MOUNT"
+        rm -rf "$WORKDIR"
+
+        echo "Squashfs created: $(ls -lh "$squashfs_path")"
+
+        # Test ensure_rostore_mounted
+        echo "Testing ensure_rostore_mounted..."
+        ensure_rostore_mounted "$CONTAINER_NAME" "$CONTAINER_IMAGE" || {
+          echo "ensure_rostore_mounted failed"
+          exit 1
+        }
+
+        rostore_mount=$(get_rostore_mount "$CONTAINER_IMAGE")
+        mountpoint -q "$rostore_mount" || {
+          echo "Rostore not mounted at $rostore_mount"
+          exit 1
+        }
+        echo "Rostore mounted at: $rostore_mount"
+        echo "Contents: $(ls "$rostore_mount")"
+
+        # Test get_storage_conf
+        storage_conf=$(get_storage_conf "$CONTAINER_IMAGE")
+        echo "Storage config: $storage_conf"
+        cat "$storage_conf"
+
+        # Run container from rostore
+        echo "Starting container from rostore..."
+        CONTAINERS_STORAGE_CONF="$storage_conf" \
+          podman run -d --name podinfo-rostore -p 9899:9898 "$CONTAINER_IMAGE"
+
+        # Wait for container
+        for i in $(seq 1 30); do
+          if curl -s -f http://localhost:9899/healthz >/dev/null 2>&1; then
+            echo "Container ready after ${i}s"
+            break
+          fi
+          [ "$i" = "30" ] && {
+            echo "Container from rostore failed to start"
+            CONTAINERS_STORAGE_CONF="$storage_conf" podman logs podinfo-rostore
+            exit 1
+          }
+          sleep 1
+        done
+
+        # Verify container works
+        response=$(curl -s http://localhost:9899/healthz)
+        echo "$response" | grep -q "OK" || {
+          echo "Health check failed for rostore container"
+          exit 1
+        }
+        echo "Container from rostore: /healthz OK"
+
+        # Cleanup
+        CONTAINERS_STORAGE_CONF="$storage_conf" podman rm -f podinfo-rostore
+        unmount_rostore "$CONTAINER_IMAGE"
+        rm -f "$squashfs_path"
+
+        echo "Rostore test: PASSED"
+    - name: "OpenRC service test"
+      runs: |
+        set -e
+        . /usr/lib/podman-container/functions.sh
+
+        CONTAINER_IMAGE="ghcr.io/stefanprodan/podinfo:${{package.version}}"
+
+        echo "=== Testing OpenRC service ==="
+
+        # Initialize OpenRC state directories
+        mkdir -p /run/openrc
+        touch /run/openrc/softlevel
+
+        # OpenRC needs /etc/rc.conf
+        cat > /etc/rc.conf << 'EOF'
+        rc_sys="docker"
+        rc_controller_cgroups="YES"
+        rc_depend_strict="NO"
+        rc_provide="loopback net"
+        EOF
+
+        # Create minimal /etc/fstab
+        touch /etc/fstab
+
+        # Create minimal network interfaces
+        mkdir -p /etc/network
+        cat > /etc/network/interfaces << 'EOF'
+        auto lo
+        iface lo inet loopback
+        EOF
+
+        # Simulate cgroups service (already mounted by QEMU runner)
+        mkdir -p /etc/runlevels/default
+
+        # Mark required services as "started" so dependencies are satisfied
+        mkdir -p /run/openrc/started /run/openrc/starting /run/openrc/inactive
+        for svc in cgroups net networking localmount hostname loopback; do
+          touch /run/openrc/started/$svc
+        done
+
+        # Pre-pull the image so the service starts faster
+        echo "Pre-pulling container image..."
+        podman pull "$CONTAINER_IMAGE"
+
+        echo "Starting podinfo-container service..."
+        rc-service podinfo-container start
+
+        # Check service status
+        echo "Checking service status..."
+        rc-service podinfo-container status || true
+
+        # Wait for container to be ready
+        echo "Waiting for container to be ready..."
+        for i in $(seq 1 30); do
+          if curl -s -f http://localhost:9898/healthz >/dev/null 2>&1; then
+            echo "Service ready after ${i}s"
+            break
+          fi
+          if [ "$i" = "30" ]; then
+            echo "Service failed to start"
+            podman ps -a
+            podman logs podinfo 2>&1 || true
+            exit 1
+          fi
+          sleep 1
+        done
+
+        # Verify container is running
+        response=$(curl -s http://localhost:9898/healthz)
+        echo "Health response: $response"
+        echo "$response" | grep -q "OK" || {
+          echo "Health check failed"
+          exit 1
+        }
+        echo "Service /healthz: OK"
+
+        # Test status command
+        echo "Testing status command..."
+        rc-service podinfo-container status
+
+        # Stop the service
+        echo "Stopping service..."
+        rc-service podinfo-container stop
+
+        # Verify container is stopped
+        sleep 2
+        if podman ps --format "{{.Names}}" | grep -q "^podinfo$"; then
+          echo "Container still running after stop!"
+          exit 1
+        fi
+        echo "Service stopped successfully"
+
+        echo "OpenRC service test: PASSED"
