@@ -105,6 +105,7 @@ runs:
           --out-dir packages/
           --cache-dir cache/
           --generate-index=false
+          --pipeline-dir ./pipelines
         )
 
         # Add local repo if we have dependencies
