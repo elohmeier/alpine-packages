@@ -1,0 +1,26 @@
+--- a/third_party/pigweed/repo/pw_protobuf_compiler/proto.gni
++++ b/third_party/pigweed/repo/pw_protobuf_compiler/proto.gni
+@@ -616,9 +616,12 @@ template("pw_proto_library") {
+     }
+   }
+
+-  # For each proto target, create a file which collects the base directories of
+-  # all of its dependencies to list as include paths to protoc.
+-  generated_file("$target_name._includes") {
++  # Only create _includes in pw_protobuf_compiler_TOOLCHAIN to avoid
++  # duplicate output file collisions when multiple toolchains are used.
++  if (current_toolchain == pw_protobuf_compiler_TOOLCHAIN) {
++    # For each proto target, create a file which collects the base directories of
++    # all of its dependencies to list as include paths to protoc.
++    generated_file("$target_name._includes") {
+     # Collect metadata from the include path files of each dependency.
+
+     deps = []
+@@ -634,6 +637,7 @@ template("pw_proto_library") {
+       protoc_includes = [ rebase_path(_common.compile_dir, root_build_dir) ]
+     }
+   }
++  }
+
+   # Mirror the proto sources to the output directory with the prefix added.
+   if (current_toolchain == pw_protobuf_compiler_TOOLCHAIN) {

@@ -97,6 +97,11 @@ pipeline:
       # The chip-wheels patch sets /data but we want a more standard location
       sed -i 's|\\"/data\\"|\\"/var/lib/chip\\"|g' src/platform/Linux/BUILD.gn
 
+      # Fix pigweed proto.gni duplicate output file collision
+      # The _includes target must only be created in pw_protobuf_compiler_TOOLCHAIN
+      # to avoid multiple toolchains generating to the same output path
+      patch -p1 < /home/build/chip-sdk/fix-pigweed-proto-duplicate.patch
+
   # Set up Python build environment
   - runs: |
       cd chip-wheels/connectedhomeip
