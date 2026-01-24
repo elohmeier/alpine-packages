@@ -7,11 +7,11 @@ package:
     - license: Apache-2.0
   dependencies:
     runtime:
-      - podman
+      - podman-container-common
       - aardvark-dns
       - netavark
-      - squashfs-tools
       - dbus
+      - dbus-openrc
       - bluez
       - bluez-openrc
   target-architecture:
@@ -40,11 +40,8 @@ package:
       # Check if running on diskless system and auto-setup
       if [ -d /media/mmcblk0p1 ] || [ -d /media/sda1 ] || [ -d /media/usb ]; then
         echo "Diskless system detected. Setting up container image..."
-        /usr/bin/setup-home-assistant-image
-        if [ $? -eq 0 ]; then
-          rc-update add home-assistant-rostore boot 2>/dev/null || true
-          rc-service home-assistant-rostore start 2>/dev/null || true
-        fi
+        . /etc/conf.d/home-assistant-container 2>/dev/null || true
+        setup-container-image home-assistant "${CONTAINER_IMAGE:-ghcr.io/home-assistant/home-assistant:@VERSION@}"
       fi
 
       echo ""
@@ -61,7 +58,8 @@ package:
       # Auto-upgrade container image on diskless systems
       if [ -d /media/mmcblk0p1 ] || [ -d /media/sda1 ] || [ -d /media/usb ]; then
         echo "Upgrading Home Assistant container image..."
-        /usr/bin/setup-home-assistant-image --upgrade
+        . /etc/conf.d/home-assistant-container 2>/dev/null || true
+        setup-container-image home-assistant "${CONTAINER_IMAGE:-ghcr.io/home-assistant/home-assistant:@VERSION@}" --upgrade
       fi
 
 environment:
@@ -79,14 +77,11 @@ pipeline:
       # Substitute version placeholder in scripts
       sed -i "s/@VERSION@/${{package.version}}/g" \
         home-assistant-container/home-assistant-container.initd \
-        home-assistant-container/setup-home-assistant-image.sh \
         home-assistant-container/home-assistant-container.confd
 
-      # Install OpenRC init scripts
+      # Install OpenRC init script
       install -Dm755 home-assistant-container/home-assistant-container.initd \
         "${{targets.destdir}}"/etc/init.d/home-assistant-container
-      install -Dm755 home-assistant-container/home-assistant-rostore.initd \
-        "${{targets.destdir}}"/etc/init.d/home-assistant-rostore
 
       # Install configuration file
       install -Dm644 home-assistant-container/home-assistant-container.confd \
@@ -95,10 +90,6 @@ pipeline:
       # Install udev rules for USB device access
       install -Dm644 home-assistant-container/99-home-assistant.rules \
         "${{targets.destdir}}"/etc/udev/rules.d/99-home-assistant.rules
-
-      # Install setup script for diskless systems
-      install -Dm755 home-assistant-container/setup-home-assistant-image.sh \
-        "${{targets.destdir}}"/usr/bin/setup-home-assistant-image
 
       # Create data directory
       install -dm755 "${{targets.destdir}}"/var/lib/homeassistant
@@ -113,14 +104,28 @@ test:
         - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
       packages:
         - busybox
+        - podman-container-common
+        - curl
+        - iptables
+        - openrc
   pipeline:
-    - runs: |
-        # Test init scripts exist and are executable
-        test -x /etc/init.d/home-assistant-container
-        test -x /etc/init.d/home-assistant-rostore
-    - runs: |
-        # Test config file exists
-        test -f /etc/conf.d/home-assistant-container
-    - runs: |
-        # Test data directory exists
-        test -d /var/lib/homeassistant
+    - uses: test/openrc-init
+    - uses: test/dbus
+    - uses: test/bluetooth
+    - name: "Start Home Assistant service"
+      uses: test/podman-start
+      with:
+        service_name: home-assistant-container
+        setup: |
+          mkdir -p /var/lib/homeassistant
+    - name: "Wait for Home Assistant"
+      uses: test/http-health
+      with:
+        url: "http://localhost:8123/manifest.json"
+        expected: "Home Assistant"
+        timeout: "120"
+    - name: "Stop Home Assistant service"
+      uses: test/podman-stop
+      with:
+        service_name: home-assistant-container
+        verify_container: home-assistant

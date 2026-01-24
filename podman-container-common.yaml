@@ -43,37 +43,154 @@ test:
         - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
       packages:
         - busybox
+        - curl
+        - iptables
+        - aardvark-dns
+        - netavark
   pipeline:
-    - runs: |
-        # Test functions.sh exists
-        test -f /usr/lib/podman-container/functions.sh
-    - runs: |
-        # Test setup-container-image is executable
-        test -x /usr/bin/setup-container-image
-    - runs: |
-        # Test functions.sh can be sourced
+    - name: "Test get_storage_conf conditional behavior"
+      runs: |
         . /usr/lib/podman-container/functions.sh
-        # Test sanitize_image_ref function
-        result=$(sanitize_image_ref "ghcr.io/stefanprodan/podinfo:6.9.4")
-        [ "$result" = "ghcr.io-stefanprodan-podinfo-6.9.4" ] || {
-            echo "Expected 'ghcr.io-stefanprodan-podinfo-6.9.4', got '$result'"
+
+        IMAGE="ghcr.io/stefanprodan/podinfo:6.9.4"
+
+        # Test 1: Without rostore mounted - should NOT include additionalimagestores
+        conf_file=$(get_storage_conf "$IMAGE")
+        [ -f "$conf_file" ] || {
+            echo "Storage config file not created"
             exit 1
         }
-    - runs: |
-        # Test get_squashfs_path function
-        . /usr/lib/podman-container/functions.sh
-        result=$(get_squashfs_path "podinfo" "ghcr.io/stefanprodan/podinfo:6.9.4" "/media/mmcblk0p1")
-        expected="/media/mmcblk0p1/podinfo-ghcr.io-stefanprodan-podinfo-6.9.4.squashfs"
-        [ "$result" = "$expected" ] || {
-            echo "Expected '$expected', got '$result'"
+
+        if grep -q 'additionalimagestores' "$conf_file"; then
+            echo "Should NOT have additionalimagestores when rostore not mounted"
+            cat "$conf_file"
+            exit 1
+        fi
+        echo "No additionalimagestores without rostore: OK"
+
+        # Test 2: With fake rostore mounted - should include additionalimagestores
+        rostore_mount=$(get_rostore_mount "$IMAGE")
+        mkdir -p "$rostore_mount"
+        mount -t tmpfs tmpfs "$rostore_mount"
+
+        rm -f "$conf_file"
+        conf_file=$(get_storage_conf "$IMAGE")
+
+        grep -q 'additionalimagestores' "$conf_file" || {
+            echo "Missing additionalimagestores when rostore is mounted"
+            cat "$conf_file"
             exit 1
         }
-    - runs: |
-        # Test get_rostore_mount function
+        echo "Has additionalimagestores with rostore: OK"
+
+        umount "$rostore_mount"
+        rmdir "$rostore_mount"
+        rm -rf /run/podman-container
+    - name: "Rostore test - squashfs and read-only storage workflow"
+      runs: |
+        set -e
         . /usr/lib/podman-container/functions.sh
-        result=$(get_rostore_mount "ghcr.io/stefanprodan/podinfo:6.9.4")
-        expected="/var/lib/containers/rostore/ghcr.io-stefanprodan-podinfo-6.9.4"
-        [ "$result" = "$expected" ] || {
-            echo "Expected '$expected', got '$result'"
-            exit 1
+
+        CONTAINER_IMAGE="ghcr.io/stefanprodan/podinfo:6.9.4"
+        CONTAINER_NAME="podinfo"
+
+        echo "=== Testing squashfs/rostore workflow ==="
+
+        # Create fake SD card mount point
+        SD_MOUNT="/media/mmcblk0p1"
+        mkdir -p "$SD_MOUNT"
+        echo "Created fake SD mount: $SD_MOUNT"
+
+        # Test find_sd_mount
+        found_mount=$(find_sd_mount)
+        [ "$found_mount" = "$SD_MOUNT" ] || {
+          echo "find_sd_mount failed: expected '$SD_MOUNT', got '$found_mount'"
+          exit 1
         }
+        echo "find_sd_mount: OK"
+
+        # Test get_squashfs_path
+        squashfs_path=$(get_squashfs_path "$CONTAINER_NAME" "$CONTAINER_IMAGE" "$SD_MOUNT")
+        echo "Squashfs path: $squashfs_path"
+
+        # Create tmpfs for temporary podman storage
+        WORKDIR="/tmp/rostore-test"
+        TEMP_MOUNT="$WORKDIR/storage"
+        mkdir -p "$WORKDIR" "$TEMP_MOUNT"
+        mount -t tmpfs -o size=2G tmpfs "$TEMP_MOUNT"
+
+        # Create podman storage config for pulling
+        mkdir -p "$TEMP_MOUNT/graphroot" "$WORKDIR/runroot"
+        cat > "$WORKDIR/storage.conf" << EOF
+        [storage]
+        driver = "overlay"
+        graphroot = "$TEMP_MOUNT/graphroot"
+        runroot = "$WORKDIR/runroot"
+        EOF
+
+        echo "Pulling image to temporary storage..."
+        CONTAINERS_STORAGE_CONF="$WORKDIR/storage.conf" podman pull "$CONTAINER_IMAGE"
+
+        echo "Creating squashfs from graphroot..."
+        mksquashfs "$TEMP_MOUNT/graphroot" "$squashfs_path" -comp zstd -noappend -quiet
+
+        # Unmount temp storage
+        umount "$TEMP_MOUNT"
+        rm -rf "$WORKDIR"
+
+        echo "Squashfs created: $(ls -lh "$squashfs_path")"
+
+        # Test ensure_rostore_mounted
+        echo "Testing ensure_rostore_mounted..."
+        ensure_rostore_mounted "$CONTAINER_NAME" "$CONTAINER_IMAGE" || {
+          echo "ensure_rostore_mounted failed"
+          exit 1
+        }
+
+        rostore_mount=$(get_rostore_mount "$CONTAINER_IMAGE")
+        mountpoint -q "$rostore_mount" || {
+          echo "Rostore not mounted at $rostore_mount"
+          exit 1
+        }
+        echo "Rostore mounted at: $rostore_mount"
+        echo "Contents: $(ls "$rostore_mount")"
+
+        # Test get_storage_conf
+        storage_conf=$(get_storage_conf "$CONTAINER_IMAGE")
+        echo "Storage config: $storage_conf"
+        cat "$storage_conf"
+
+        # Run container from rostore
+        echo "Starting container from rostore..."
+        CONTAINERS_STORAGE_CONF="$storage_conf" \
+          podman run -d --name podinfo-rostore -p 9899:9898 "$CONTAINER_IMAGE"
+
+        # Wait for container
+        for i in $(seq 1 30); do
+          if curl -s -f http://localhost:9899/healthz >/dev/null 2>&1; then
+            echo "Container ready after ${i}s"
+            break
+          fi
+          [ "$i" = "30" ] && {
+            echo "Container from rostore failed to start"
+            CONTAINERS_STORAGE_CONF="$storage_conf" podman logs podinfo-rostore
+            exit 1
+          }
+          sleep 1
+        done
+
+        # Verify container works
+        response=$(curl -s http://localhost:9899/healthz)
+        echo "$response" | grep -q "OK" || {
+          echo "Health check failed for rostore container"
+          exit 1
+        }
+        echo "Container from rostore: /healthz OK"
+
+        # Cleanup
+        CONTAINERS_STORAGE_CONF="$storage_conf" podman rm -f podinfo-rostore
+        unmount_rostore "$CONTAINER_IMAGE"
+        rm -f "$squashfs_path"
+        rmdir "$SD_MOUNT" 2>/dev/null || true
+
+        echo "Rostore test: PASSED"

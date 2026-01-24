@@ -1,0 +1,97 @@
+name: HTTP health check
+
+description: |
+  Waits for an HTTP endpoint to return an expected response.
+  Polls the endpoint until the response contains the expected string or timeout.
+
+  USE THIS PIPELINE WHEN:
+  - You need to wait for a service to become healthy
+  - You want to verify an HTTP endpoint returns expected content
+
+  EXAMPLES:
+
+  Example 1 - Basic health check:
+    - uses: test/http-health
+      with:
+        url: "http://localhost:8080/health"
+        expected: "OK"
+
+  Example 2 - With custom timeout:
+    - uses: test/http-health
+      with:
+        url: "http://localhost:9898/healthz"
+        expected: "OK"
+        timeout: "120"
+
+  Example 3 - Check for specific content:
+    - uses: test/http-health
+      with:
+        url: "http://localhost:8123/manifest.json"
+        expected: "Home Assistant"
+        timeout: "180"
+
+needs:
+  packages:
+    - curl
+
+inputs:
+  url:
+    description: |
+      The HTTP endpoint to poll for readiness.
+      Example: "http://localhost:9898/healthz"
+    required: true
+  expected:
+    description: |
+      A string that must appear in the response.
+      Example: "OK"
+    required: true
+  timeout:
+    description: |
+      Maximum time in seconds to wait for the endpoint.
+      Default: 60 seconds
+    default: "60"
+
+pipeline:
+  - name: "HTTP health check"
+    runs: |
+      set -e
+
+      info() { echo "==> $*"; }
+      fail() { echo "ERROR: $*" >&2; exit 1; }
+
+      TMPD=$(mktemp -d)
+      trap "rm -rf '$TMPD'" EXIT
+
+      cat > "$TMPD/url_input" <<'MELANGE_URL_EOF'
+      ${{inputs.url}}
+      MELANGE_URL_EOF
+      HEALTH_URL=$(cat "$TMPD/url_input")
+
+      cat > "$TMPD/expected_input" <<'MELANGE_EXPECTED_EOF'
+      ${{inputs.expected}}
+      MELANGE_EXPECTED_EOF
+      EXPECTED=$(cat "$TMPD/expected_input")
+
+      TIMEOUT="${{inputs.timeout}}"
+
+      info "Waiting for health endpoint: $HEALTH_URL"
+      info "Expected response containing: $EXPECTED"
+      info "Timeout: ${TIMEOUT}s"
+
+      i=0
+      while [ $i -lt "$TIMEOUT" ]; do
+        if response=$(curl -sf "$HEALTH_URL" 2>/dev/null); then
+          if echo "$response" | grep -qF "$EXPECTED"; then
+            info "Health check passed after ${i}s"
+            info "Response: $response"
+            exit 0
+          fi
+        fi
+        i=$((i + 1))
+        if [ $i -ge "$TIMEOUT" ]; then
+          info "Timeout reached after ${TIMEOUT}s"
+          info "Last response: ${response:-<no response>}"
+          fail "Health endpoint did not respond with expected content"
+        fi
+        sleep 1
+      done

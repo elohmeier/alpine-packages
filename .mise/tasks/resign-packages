@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+#MISE description="Resign all packages and regenerate APKINDEX"
+set -euo pipefail
+
+ARCH="${1:-$(uname -m)}"
+if [[ "$ARCH" == "arm64" ]]; then
+  ARCH="aarch64"
+fi
+
+PKG_DIR="packages/$ARCH"
+
+if [[ ! -d "$PKG_DIR" ]]; then
+  echo "Error: Package directory $PKG_DIR does not exist"
+  exit 1
+fi
+
+echo "Resigning packages in $PKG_DIR..."
+melange index --signing-key local-melange.rsa -o "$PKG_DIR/APKINDEX.tar.gz" "$PKG_DIR"/*.apk
+
+echo "Done. APKINDEX regenerated at $PKG_DIR/APKINDEX.tar.gz"

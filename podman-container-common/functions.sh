@@ -80,7 +80,7 @@ unmount_rostore() {
     fi
 }
 
-# Generate a temporary storage.conf pointing to rostore
+# Generate a temporary storage.conf pointing to rostore (if available)
 # Returns path to the generated file
 get_storage_conf() {
     local image="$1"
@@ -91,7 +91,9 @@ get_storage_conf() {
 
     mkdir -p /run/podman-container
 
-    cat > "$conf_file" << EOF
+    # Only add additionalimagestores if rostore is actually mounted
+    if mountpoint -q "$rostore_mount" 2>/dev/null; then
+        cat > "$conf_file" << EOF
 [storage]
 driver = "overlay"
 graphroot = "/var/lib/containers/storage"
@@ -100,6 +102,14 @@ runroot = "/run/containers/storage"
 [storage.options]
 additionalimagestores = ["${rostore_mount}"]
 EOF
+    else
+        cat > "$conf_file" << EOF
+[storage]
+driver = "overlay"
+graphroot = "/var/lib/containers/storage"
+runroot = "/run/containers/storage"
+EOF
+    fi
 
     echo "$conf_file"
 }

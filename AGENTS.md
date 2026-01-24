@@ -5,6 +5,40 @@
 ```
 <package>.yaml      # melange build definition
 <package>/          # supporting files (init scripts, config, udev rules)
+pipelines/          # reusable melange pipelines
+  test/             # test pipelines (e.g., podman-container.yaml)
+.mise/tasks/        # mise task scripts
+```
+
+## mise Configuration
+
+The `mise.toml` configures environment variables for melange. With mise activated, commands use these defaults automatically:
+
+```bash
+# Instead of:
+melange build --arch arm64 --signing-key local-melange.rsa \
+  --repository-append ./packages --keyring-append local-melange.rsa.pub \
+  --pipeline-dirs ./pipelines <package>.yaml
+
+# Just run:
+melange build <package>.yaml
+melange test <package>.yaml
+```
+
+Key environment variables:
+
+- `MELANGE_ARCH` - target architecture (arm64)
+- `MELANGE_SIGNING_KEY` - signing key path
+- `MELANGE_REPOSITORY_APPEND` / `MELANGE_KEYRING_APPEND` - local repo
+- `MELANGE_PIPELINE_DIRS` - custom pipeline directory
+- `MELANGE_TEST_RUNNER` - test runner (qemu)
+- `QEMU_KERNEL_IMAGE` / `QEMU_KERNEL_MODULES` - kernel for QEMU tests
+
+### mise Tasks
+
+```bash
+mise run fetch-kernel [arch]   # Download Alpine linux-virt kernel for QEMU testing
+mise run resign-packages [arch] # Resign all packages and regenerate APKINDEX
 ```
 
 ## Building
@@ -125,6 +159,263 @@ REBUILD_ALL=true uv run generate-matrix
 # Test change detection
 BASE_REF=HEAD~1 uv run generate-matrix
 ```
+
+## Podman Container Packages
+
+For wrapping container images as Alpine packages with OpenRC integration and diskless system support, use `podman-container-common` as a dependency.
+
+### Reference Design: podinfo-container
+
+`podinfo-container.yaml` demonstrates the pattern:
+
+```yaml
+package:
+  name: <name>-container
+  dependencies:
+    runtime:
+      - podman-container-common
+      - aardvark-dns
+      - netavark
+```
+
+Required files in `<name>-container/`:
+
+- `<name>-container.initd` - OpenRC init script
+- `<name>-container.confd` - configuration defaults
+
+### Init Script Pattern
+
+```sh
+#!/sbin/openrc-run
+. /usr/lib/podman-container/functions.sh
+
+name="<name>-container"
+CONTAINER_NAME="<name>"
+: ${CONTAINER_IMAGE:="<registry>/<image>:<version>"}
+
+depend() {
+    need net cgroups
+    after firewall
+}
+
+start_pre() {
+    wait_for_podman || return 1
+    # Mount squashfs if available (diskless mode), otherwise pull on first run
+    if ! ensure_rostore_mounted "$CONTAINER_NAME" "$CONTAINER_IMAGE"; then
+        einfo "No rostore image found, will pull on first run"
+    fi
+    podman rm -f "$CONTAINER_NAME" 2>/dev/null || true
+}
+
+start() {
+    ebegin "Starting ${name}"
+    local storage_conf
+    storage_conf=$(get_storage_conf "$CONTAINER_IMAGE")
+    CONTAINERS_STORAGE_CONF="$storage_conf" \
+    podman run -d --rm --name "$CONTAINER_NAME" \
+        -p <host-port>:<container-port> \
+        ${CONTAINER_EXTRA_OPTS} \
+        "$CONTAINER_IMAGE" >/dev/null 2>&1
+    eend $?
+}
+
+stop() {
+    ebegin "Stopping ${name}"
+    podman stop -t 30 "$CONTAINER_NAME" 2>/dev/null
+    eend $?
+}
+
+status() {
+    container_status "$CONTAINER_NAME"
+}
+```
+
+### podman-container-common Functions
+
+Located in `/usr/lib/podman-container/functions.sh`:
+
+| Function                                   | Description                                                    |
+| ------------------------------------------ | -------------------------------------------------------------- |
+| `sanitize_image_ref <image>`               | Convert image ref to filesystem-safe name                      |
+| `find_sd_mount`                            | Find SD card mount (/media/mmcblk0p1, /media/sda1, /media/usb) |
+| `get_squashfs_path <name> <image> [mount]` | Get squashfs file path on SD card                              |
+| `get_rostore_mount <image>`                | Get read-only store mount path                                 |
+| `ensure_rostore_mounted <name> <image>`    | Mount squashfs if available                                    |
+| `unmount_rostore <image>`                  | Unmount read-only store                                        |
+| `get_storage_conf <image>`                 | Generate storage.conf (includes rostore if mounted)            |
+| `wait_for_podman`                          | Wait for podman to be ready                                    |
+| `container_status <name>`                  | Check if container is running                                  |
+
+### setup-container-image Script
+
+For diskless systems, `/usr/bin/setup-container-image` creates squashfs images on SD card:
+
+```bash
+# Initial setup - pulls image and creates squashfs
+setup-container-image podinfo ghcr.io/stefanprodan/podinfo:6.9.4
+
+# Upgrade - replaces existing squashfs with new version
+setup-container-image podinfo ghcr.io/stefanprodan/podinfo:6.9.5 --upgrade
+```
+
+### Testing Container Packages
+
+Use composable test pipelines for integration testing. Pipelines can be chained together in sequence.
+
+**Available test pipelines:**
+
+| Pipeline            | Description                                   | Needs                   |
+| ------------------- | --------------------------------------------- | ----------------------- |
+| `test/openrc-init`  | Initialize OpenRC environment                 | `openrc`                |
+| `test/podman-start` | Start a Podman container service              | `openrc`                |
+| `test/podman-stop`  | Stop a Podman container service               | `openrc`                |
+| `test/http-health`  | Wait for HTTP endpoint                        | `curl`                  |
+| `test/dbus`         | Start D-Bus service (creates messagebus user) | `dbus`, `dbus-openrc`   |
+| `test/bluetooth`    | Start Bluetooth service (requires dbus first) | `bluez`, `bluez-openrc` |
+| `test/debug`        | Pause execution for debugging (see below)     | none                    |
+
+**Basic example (container service):**
+
+```yaml
+test:
+  environment:
+    contents:
+      packages:
+        - busybox
+        - podman-container-common
+        - curl
+        - iptables
+        - openrc
+  pipeline:
+    - uses: test/podman-start
+      with:
+        service_name: myapp-container
+    - uses: test/http-health
+      with:
+        url: "http://localhost:8080/health"
+        expected: "OK"
+    - uses: test/podman-stop
+      with:
+        service_name: myapp-container
+        verify_container: myapp
+```
+
+**Example with debugging (container keeps running):**
+
+```yaml
+test:
+  pipeline:
+    - uses: test/podman-start
+      with:
+        service_name: podinfo-container
+    - uses: test/http-health
+      with:
+        url: "http://localhost:9898/healthz"
+        expected: "OK"
+    - name: "Custom verification"
+      runs: |
+        curl -s http://localhost:9898/ | grep -q "podinfo"
+    - uses: test/debug # Debug while container still runs
+    - uses: test/podman-stop
+      with:
+        service_name: podinfo-container
+        verify_container: podinfo
+```
+
+**Advanced example (container requiring dbus/bluetooth):**
+
+```yaml
+test:
+  environment:
+    contents:
+      packages:
+        - busybox
+        - podman-container-common
+        - curl
+        - iptables
+        - openrc
+  pipeline:
+    - uses: test/openrc-init
+    - uses: test/dbus
+    - uses: test/bluetooth
+    - uses: test/podman-start
+      with:
+        service_name: home-assistant-container
+        setup: |
+          mkdir -p /var/lib/homeassistant
+    - uses: test/http-health
+      with:
+        url: "http://localhost:8123/manifest.json"
+        expected: "Home Assistant"
+        timeout: "120"
+    - uses: test/podman-stop
+      with:
+        service_name: home-assistant-container
+```
+
+**Pipeline parameters:**
+
+`test/podman-start`:
+
+| Parameter      | Required | Description                                       |
+| -------------- | -------- | ------------------------------------------------- |
+| `service_name` | Yes      | OpenRC service name (e.g., `"podinfo-container"`) |
+| `setup`        | No       | Commands to run before starting service           |
+
+`test/http-health`:
+
+| Parameter  | Required | Description                                          |
+| ---------- | -------- | ---------------------------------------------------- |
+| `url`      | Yes      | URL to poll (e.g., `"http://localhost:8080/health"`) |
+| `expected` | Yes      | String to match in response (e.g., `"OK"`)           |
+| `timeout`  | No       | Timeout in seconds (default: `"60"`)                 |
+
+`test/podman-stop`:
+
+| Parameter          | Required | Description                         |
+| ------------------ | -------- | ----------------------------------- |
+| `service_name`     | Yes      | OpenRC service name to stop         |
+| `verify_container` | No       | Container name to verify is stopped |
+
+**Notes:**
+
+- `test/podman-start` initializes OpenRC automatically if not already done
+- When using service pipelines (dbus, bluetooth), run `test/openrc-init` first
+- Service pipelines mark services as started for OpenRC dependency tracking
+
+### Debugging Tests
+
+Use `test/debug` to pause execution and inspect the test environment. Run with interactive flags:
+
+```bash
+melange test --interactive --debug-runner <package>.yaml
+```
+
+Add the debug pipeline between health check and stop to debug a running container:
+
+```yaml
+pipeline:
+  - uses: test/podman-start
+    with:
+      service_name: myapp-container
+  - uses: test/http-health
+    with:
+      url: "http://localhost:8080/health"
+      expected: "OK"
+  - uses: test/debug # Pauses here - container still running
+  - uses: test/podman-stop
+    with:
+      service_name: myapp-container
+```
+
+While paused:
+
+- SSH into the VM using credentials from melange output
+- Use SSH port forwarding to access services: `ssh -L 8123:localhost:8123 build@localhost -p <port>`
+- Create `/tmp/debug-continue` inside the VM to resume execution
+- Press Ctrl+C in melange to abort
+
+**IMPORTANT:** After modifying a package yaml, always run `melange build <package>.yaml` to verify the configuration is valid.
 
 ## Relevant sources
 

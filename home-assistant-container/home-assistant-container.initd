@@ -1,13 +1,15 @@
 #!/sbin/openrc-run
 
+. /usr/lib/podman-container/functions.sh
+
 name="home-assistant-container"
 description="Home Assistant Core (Podman container)"
 
-: ${HASS_IMAGE:="ghcr.io/home-assistant/home-assistant:@VERSION@"}
-: ${HASS_EXTRA_OPTS:=""}
+CONTAINER_NAME="home-assistant"
+: ${CONTAINER_IMAGE:="ghcr.io/home-assistant/home-assistant:@VERSION@"}
+: ${CONTAINER_EXTRA_OPTS:=""}
 
 HASS_CONFIG="/var/lib/homeassistant"
-HASS_CONTAINER_NAME="home-assistant"
 
 # Auto-detect timezone from host
 if [ -f /etc/timezone ]; then
@@ -20,67 +22,48 @@ fi
 
 depend() {
     need net cgroups dbus bluetooth
-    after firewall home-assistant-rostore
+    after firewall
 }
 
 start_pre() {
     checkpath -d -m 0755 -o root:root "${HASS_CONFIG}"
 
-    # Wait for podman to be ready (may take a moment after boot)
-    local i=0
-    while ! podman info >/dev/null 2>&1; do
-        i=$((i + 1))
-        if [ $i -ge 30 ]; then
-            eerror "Timeout waiting for podman to be ready"
-            return 1
-        fi
-        sleep 1
-    done
+    wait_for_podman || return 1
 
-    # Wait for image to be available (rostore may still be mounting)
-    i=0
-    while ! podman image exists "${HASS_IMAGE}" 2>/dev/null; do
-        i=$((i + 1))
-        if [ $i -ge 60 ]; then
-            # Image not found after waiting, try to pull it
-            ebegin "Pulling Home Assistant image"
-            podman pull "${HASS_IMAGE}"
-            eend $? || return 1
-            break
-        fi
-        sleep 1
-    done
+    # Mount squashfs if available (diskless mode), otherwise pull
+    if ! ensure_rostore_mounted "$CONTAINER_NAME" "$CONTAINER_IMAGE"; then
+        einfo "No rostore image found, will pull on first run"
+    fi
 
     # Remove any existing container
-    podman rm -f "${HASS_CONTAINER_NAME}" 2>/dev/null || true
+    podman rm -f "$CONTAINER_NAME" 2>/dev/null || true
 }
 
 start() {
     ebegin "Starting ${name}"
-    podman run -d --rm --name "${HASS_CONTAINER_NAME}" \
+    local storage_conf
+
+    storage_conf=$(get_storage_conf "$CONTAINER_IMAGE")
+
+    CONTAINERS_STORAGE_CONF="$storage_conf" \
+    podman run -d --rm --name "$CONTAINER_NAME" \
         -v "${HASS_CONFIG}:/config" \
         -v /run/dbus:/run/dbus \
         -v /var/lib/bluetooth:/var/lib/bluetooth \
         -e "TZ=${HASS_TIMEZONE}" \
         --network=host \
         --privileged \
-        ${HASS_EXTRA_OPTS} \
-        "${HASS_IMAGE}" >/dev/null 2>&1
+        ${CONTAINER_EXTRA_OPTS} \
+        "$CONTAINER_IMAGE" >/dev/null 2>&1
     eend $?
 }
 
 stop() {
     ebegin "Stopping ${name}"
-    podman stop -t 30 "${HASS_CONTAINER_NAME}" 2>/dev/null
+    podman stop -t 30 "$CONTAINER_NAME" 2>/dev/null
     eend $?
 }
 
 status() {
-    if podman ps --format "{{.Names}}" | grep -q "^${HASS_CONTAINER_NAME}$"; then
-        einfo "Container ${HASS_CONTAINER_NAME} is running"
-        return 0
-    else
-        einfo "Container ${HASS_CONTAINER_NAME} is not running"
-        return 3
-    fi
+    container_status "$CONTAINER_NAME"
 }

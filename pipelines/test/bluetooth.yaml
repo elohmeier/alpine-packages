@@ -1,0 +1,22 @@
+name: Start Bluetooth service
+
+description: |
+  Starts the Bluetooth service for testing.
+  Requires D-Bus to be started first (use test/dbus pipeline before this one).
+
+needs:
+  packages:
+    - bluez
+    - bluez-openrc
+
+pipeline:
+  - name: "Start Bluetooth"
+    runs: |
+      # Create bluetooth directory if needed
+      mkdir -p /var/lib/bluetooth
+
+      # Start bluetooth
+      rc-service bluetooth start || exit 1
+
+      # Mark as started for OpenRC dependency tracking
+      touch /run/openrc/started/bluetooth

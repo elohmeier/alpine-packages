@@ -1,0 +1,118 @@
+name: Start Podman container service
+
+description: |
+  Starts a Podman container service managed by OpenRC.
+  Automatically initializes OpenRC environment if not already done.
+
+  USE THIS PIPELINE WHEN:
+  - You need to start a Podman container service for testing
+  - You want to run setup commands before starting the service
+
+  EXAMPLES:
+
+  Example 1 - Simple container service:
+    - uses: test/podman-start
+      with:
+        service_name: myapp-container
+
+  Example 2 - With custom setup:
+    - uses: test/podman-start
+      with:
+        service_name: myapp-container
+        setup: |
+          mkdir -p /var/lib/myapp
+          echo "CONFIG=test" > /etc/conf.d/myapp-container
+
+needs:
+  packages:
+    - openrc
+
+inputs:
+  service_name:
+    description: |
+      The OpenRC service name (e.g., "podinfo-container").
+      This is the name used with rc-service commands.
+    required: true
+  setup:
+    description: |
+      Optional commands to run BEFORE starting the service.
+      Use this to create directories, modify config files, etc.
+      If no shebang is present, '#!/bin/sh -e' will be prepended.
+    required: false
+
+pipeline:
+  - name: "Start OpenRC service"
+    runs: |
+      set -e
+
+      info() { echo "==> $*"; }
+      fail() { echo "ERROR: $*" >&2; exit 1; }
+
+      SERVICE_NAME="${{inputs.service_name}}"
+
+      # Initialize OpenRC environment if not already done
+      if [ ! -f /run/openrc/softlevel ]; then
+        info "Initializing OpenRC environment..."
+        mkdir -p /run/openrc
+        touch /run/openrc/softlevel
+
+        cat > /etc/rc.conf << 'EOF'
+      rc_sys="docker"
+      rc_controller_cgroups="YES"
+      rc_depend_strict="NO"
+      rc_provide="loopback net"
+      EOF
+
+        touch /etc/fstab
+
+        mkdir -p /etc/network
+        cat > /etc/network/interfaces << 'EOF'
+      auto lo
+      iface lo inet loopback
+      EOF
+
+        mkdir -p /etc/runlevels/default
+
+        # Mark required services as "started" so dependencies are satisfied
+        mkdir -p /run/openrc/started /run/openrc/starting /run/openrc/inactive
+        for svc in cgroups net networking localmount hostname loopback; do
+          touch /run/openrc/started/$svc
+        done
+      fi
+
+      # Run optional setup
+      TMPD=$(mktemp -d)
+      trap "rm -rf '$TMPD'" EXIT
+
+      cat > "$TMPD/setup_input" <<'MELANGE_SETUP_EOF'
+      ${{inputs.setup}}
+      MELANGE_SETUP_EOF
+      setup=$(cat "$TMPD/setup_input")
+
+      if [ -n "$setup" ]; then
+        SETUP_F="$TMPD/setup.sh"
+        shbang="#!"
+        if [ "${setup#${shbang}}" = "$setup" ]; then
+          printf "%s\n" '#!/bin/sh -e' > "$SETUP_F"
+        fi
+        printf "%s\n" "$setup" >> "$SETUP_F"
+        chmod 755 "$SETUP_F"
+        info "Running setup script..."
+        "$SETUP_F" || fail "Setup script failed"
+      fi
+
+      # Start the service
+      info "Starting service: $SERVICE_NAME"
+      if ! rc-service "$SERVICE_NAME" start; then
+        info "Service failed to start. Debugging info:"
+        if command -v podman >/dev/null 2>&1; then
+          info "Container status:"
+          podman ps -a 2>&1 || true
+          CONTAINER_NAME="${SERVICE_NAME%-container}"
+          info "Container logs:"
+          podman logs "$CONTAINER_NAME" 2>&1 || true
+        fi
+        fail "Failed to start service"
+      fi
+
+      info "Service $SERVICE_NAME started successfully"

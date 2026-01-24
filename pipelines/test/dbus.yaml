@@ -1,0 +1,23 @@
+name: Start D-Bus service
+
+description: |
+  Starts the D-Bus system message bus for testing.
+  Creates the messagebus user/group if needed and marks the service as started for OpenRC.
+
+needs:
+  packages:
+    - dbus
+    - dbus-openrc
+
+pipeline:
+  - name: "Start D-Bus"
+    runs: |
+      # Create messagebus user/group if needed
+      addgroup -S messagebus 2>/dev/null || true
+      adduser -S -D -H -h /dev/null -s /sbin/nologin -G messagebus messagebus 2>/dev/null || true
+
+      # Start dbus
+      rc-service dbus start || exit 1
+
+      # Mark as started for OpenRC dependency tracking
+      touch /run/openrc/started/dbus

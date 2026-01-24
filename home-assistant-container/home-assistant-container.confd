@@ -1,10 +1,10 @@
 # Home Assistant Container Configuration
 
 # Container image (default: version matching this package)
-#HASS_IMAGE="ghcr.io/home-assistant/home-assistant:@VERSION@"
+#CONTAINER_IMAGE="ghcr.io/home-assistant/home-assistant:@VERSION@"
 
 # Use latest stable instead of pinned version:
-#HASS_IMAGE="ghcr.io/home-assistant/home-assistant:stable"
+#CONTAINER_IMAGE="ghcr.io/home-assistant/home-assistant:stable"
 
 # Extra podman options (e.g., resource limits, additional mounts)
-#HASS_EXTRA_OPTS="--memory=2g --cpus=2"
+#CONTAINER_EXTRA_OPTS="--memory=2g --cpus=2"

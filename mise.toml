@@ -2,11 +2,13 @@
 _.path = ["~/repos/github.com/chainguard-dev/melange"]
 _.source = [".mise/env.sh"]
 
-QEMU_KERNEL_IMAGE = "{{config_root}}/kernel/{% if arch() == 'arm64' %}aarch64{% else %}{{arch()}}{% endif %}/vmlinuz"
-QEMU_KERNEL_MODULES = "{{config_root}}/kernel/{% if arch() == 'arm64' %}aarch64{% else %}{{arch()}}{% endif %}/modules/"
-QEMU_MICROVM_INIT_SIGNING_KEY = "local-melange.rsa"
-
-MELANGE_RUNNER = "qemu"
 MELANGE_ARCH = "arm64"
 MELANGE_REPOSITORY_APPEND = "packages"
 MELANGE_KEYRING_APPEND = "local-melange.rsa.pub"
+MELANGE_SIGNING_KEY = "local-melange.rsa"
+
+MELANGE_TEST_RUNNER = "qemu"
+MELANGE_PIPELINE_DIRS = "{{config_root}}/pipelines"
+QEMU_KERNEL_IMAGE = "{{config_root}}/kernel/{% if arch() == 'arm64' %}aarch64{% else %}{{arch()}}{% endif %}/vmlinuz"
+QEMU_KERNEL_MODULES = "{{config_root}}/kernel/{% if arch() == 'arm64' %}aarch64{% else %}{{arch()}}{% endif %}/modules/"
+QEMU_MICROVM_INIT_SIGNING_KEY = "local-melange.rsa"
