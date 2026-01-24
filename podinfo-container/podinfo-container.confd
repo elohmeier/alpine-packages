@@ -1,0 +1,10 @@
+# Podinfo Container Configuration
+
+# Container image (default: version matching this package)
+#CONTAINER_IMAGE="ghcr.io/stefanprodan/podinfo:@VERSION@"
+
+# Use latest instead of pinned version:
+#CONTAINER_IMAGE="ghcr.io/stefanprodan/podinfo:latest"
+
+# Extra podman options (e.g., resource limits, additional mounts)
+#CONTAINER_EXTRA_OPTS="--memory=256m --cpus=0.5"

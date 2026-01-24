@@ -1,0 +1,89 @@
+package:
+  name: podinfo-container
+  version: 6.9.4
+  epoch: 0
+  description: "Podinfo (Podman container) - Go microservice template"
+  copyright:
+    - license: Apache-2.0
+  dependencies:
+    runtime:
+      - podman-container-common
+      - aardvark-dns
+      - netavark
+  target-architecture:
+    - x86_64
+    - aarch64
+  scriptlets:
+    post-install: |
+      #!/bin/sh
+      # Check if running on diskless system and auto-setup
+      if [ -d /media/mmcblk0p1 ] || [ -d /media/sda1 ] || [ -d /media/usb ]; then
+        echo "Diskless system detected. Setting up container image..."
+        . /etc/conf.d/podinfo-container 2>/dev/null || true
+        setup-container-image podinfo "${CONTAINER_IMAGE:-ghcr.io/stefanprodan/podinfo:@VERSION@}"
+      fi
+
+      echo ""
+      echo "=== Podinfo Container installed ==="
+      echo ""
+      echo "Start with:"
+      echo "  rc-service podinfo-container start"
+      echo "  rc-update add podinfo-container default"
+      echo ""
+      echo "Web interface: http://HOST:9898"
+      echo ""
+    post-upgrade: |
+      #!/bin/sh
+      # Auto-upgrade container image on diskless systems
+      if [ -d /media/mmcblk0p1 ] || [ -d /media/sda1 ] || [ -d /media/usb ]; then
+        echo "Upgrading Podinfo container image..."
+        . /etc/conf.d/podinfo-container 2>/dev/null || true
+        setup-container-image podinfo "${CONTAINER_IMAGE:-ghcr.io/stefanprodan/podinfo:@VERSION@}" --upgrade
+      fi
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/edge/main
+      - https://dl-cdn.alpinelinux.org/alpine/edge/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+
+pipeline:
+  - runs: |
+      # Substitute version placeholder in scripts
+      sed -i "s/@VERSION@/${{package.version}}/g" \
+        podinfo-container/podinfo-container.initd \
+        podinfo-container/podinfo-container.confd
+
+      # Install OpenRC init script
+      install -Dm755 podinfo-container/podinfo-container.initd \
+        "${{targets.destdir}}"/etc/init.d/podinfo-container
+
+      # Install configuration file
+      install -Dm644 podinfo-container/podinfo-container.confd \
+        "${{targets.destdir}}"/etc/conf.d/podinfo-container
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/edge/main
+        - https://dl-cdn.alpinelinux.org/alpine/edge/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+        - podman-container-common
+  pipeline:
+    - runs: |
+        # Test init script exists and is executable
+        test -x /etc/init.d/podinfo-container
+    - runs: |
+        # Test config file exists
+        test -f /etc/conf.d/podinfo-container
+    - runs: |
+        # Test init script sources functions correctly
+        grep -q '. /usr/lib/podman-container/functions.sh' /etc/init.d/podinfo-container

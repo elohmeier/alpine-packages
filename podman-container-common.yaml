@@ -1,0 +1,79 @@
+package:
+  name: podman-container-common
+  version: 1.0.0
+  epoch: 0
+  description: "Shared tooling for Podman containerized services"
+  copyright:
+    - license: MIT
+  dependencies:
+    runtime:
+      - podman
+      - squashfs-tools
+  target-architecture:
+    - x86_64
+    - aarch64
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/edge/main
+      - https://dl-cdn.alpinelinux.org/alpine/edge/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+
+pipeline:
+  - runs: |
+      # Install shared library
+      install -Dm644 podman-container-common/functions.sh \
+        "${{targets.destdir}}"/usr/lib/podman-container/functions.sh
+
+      # Install setup script
+      install -Dm755 podman-container-common/setup-container-image.sh \
+        "${{targets.destdir}}"/usr/bin/setup-container-image
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/edge/main
+        - https://dl-cdn.alpinelinux.org/alpine/edge/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+  pipeline:
+    - runs: |
+        # Test functions.sh exists
+        test -f /usr/lib/podman-container/functions.sh
+    - runs: |
+        # Test setup-container-image is executable
+        test -x /usr/bin/setup-container-image
+    - runs: |
+        # Test functions.sh can be sourced
+        . /usr/lib/podman-container/functions.sh
+        # Test sanitize_image_ref function
+        result=$(sanitize_image_ref "ghcr.io/stefanprodan/podinfo:6.9.4")
+        [ "$result" = "ghcr.io-stefanprodan-podinfo-6.9.4" ] || {
+            echo "Expected 'ghcr.io-stefanprodan-podinfo-6.9.4', got '$result'"
+            exit 1
+        }
+    - runs: |
+        # Test get_squashfs_path function
+        . /usr/lib/podman-container/functions.sh
+        result=$(get_squashfs_path "podinfo" "ghcr.io/stefanprodan/podinfo:6.9.4" "/media/mmcblk0p1")
+        expected="/media/mmcblk0p1/podinfo-ghcr.io-stefanprodan-podinfo-6.9.4.squashfs"
+        [ "$result" = "$expected" ] || {
+            echo "Expected '$expected', got '$result'"
+            exit 1
+        }
+    - runs: |
+        # Test get_rostore_mount function
+        . /usr/lib/podman-container/functions.sh
+        result=$(get_rostore_mount "ghcr.io/stefanprodan/podinfo:6.9.4")
+        expected="/var/lib/containers/rostore/ghcr.io-stefanprodan-podinfo-6.9.4"
+        [ "$result" = "$expected" ] || {
+            echo "Expected '$expected', got '$result'"
+            exit 1
+        }

@@ -1,0 +1,51 @@
+#!/sbin/openrc-run
+
+. /usr/lib/podman-container/functions.sh
+
+name="podinfo-container"
+description="Podinfo (Podman container)"
+
+CONTAINER_NAME="podinfo"
+: ${CONTAINER_IMAGE:="ghcr.io/stefanprodan/podinfo:@VERSION@"}
+: ${CONTAINER_EXTRA_OPTS:=""}
+
+depend() {
+    need net cgroups
+    after firewall
+}
+
+start_pre() {
+    wait_for_podman || return 1
+
+    # Mount squashfs if available (diskless mode), otherwise pull
+    if ! ensure_rostore_mounted "$CONTAINER_NAME" "$CONTAINER_IMAGE"; then
+        einfo "No rostore image found, will pull on first run"
+    fi
+
+    # Remove any existing container
+    podman rm -f "$CONTAINER_NAME" 2>/dev/null || true
+}
+
+start() {
+    ebegin "Starting ${name}"
+    local storage_conf
+
+    storage_conf=$(get_storage_conf "$CONTAINER_IMAGE")
+
+    CONTAINERS_STORAGE_CONF="$storage_conf" \
+    podman run -d --rm --name "$CONTAINER_NAME" \
+        -p 9898:9898 \
+        ${CONTAINER_EXTRA_OPTS} \
+        "$CONTAINER_IMAGE" >/dev/null 2>&1
+    eend $?
+}
+
+stop() {
+    ebegin "Stopping ${name}"
+    podman stop -t 30 "$CONTAINER_NAME" 2>/dev/null
+    eend $?
+}
+
+status() {
+    container_status "$CONTAINER_NAME"
+}
