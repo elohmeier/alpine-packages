@@ -1,7 +1,7 @@
 # OpenCCU Container Configuration
 
 # Container image (default: version matching this package)
-#CONTAINER_IMAGE="ghcr.io/openccu/openccu:@VERSION@"
+CONTAINER_IMAGE="ghcr.io/openccu/openccu:@VERSION@"
 
 # Use latest instead of pinned version:
 #CONTAINER_IMAGE="ghcr.io/openccu/openccu:latest"

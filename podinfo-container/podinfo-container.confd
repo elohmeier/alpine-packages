@@ -1,7 +1,7 @@
 # Podinfo Container Configuration
 
 # Container image (default: version matching this package)
-#CONTAINER_IMAGE="ghcr.io/stefanprodan/podinfo:@VERSION@"
+CONTAINER_IMAGE="ghcr.io/stefanprodan/podinfo:@VERSION@"
 
 # Use latest instead of pinned version:
 #CONTAINER_IMAGE="ghcr.io/stefanprodan/podinfo:latest"
