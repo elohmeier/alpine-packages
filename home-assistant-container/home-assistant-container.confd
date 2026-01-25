@@ -1,7 +1,7 @@
 # Home Assistant Container Configuration
 
 # Container image (default: version matching this package)
-#CONTAINER_IMAGE="ghcr.io/home-assistant/home-assistant:@VERSION@"
+CONTAINER_IMAGE="ghcr.io/home-assistant/home-assistant:@VERSION@"
 
 # Use latest stable instead of pinned version:
 #CONTAINER_IMAGE="ghcr.io/home-assistant/home-assistant:stable"
