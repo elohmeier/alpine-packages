@@ -58,11 +58,21 @@ fi
 WORKDIR="/tmp/${CONTAINER_NAME}-setup"
 TEMP_MOUNT="$WORKDIR/storage"
 
+# Check if SD card is already mounted read-write
+# We only remount to read-only at the end if we changed it
+SD_WAS_RO=false
+if grep -q " $SD_MOUNT .*\bro\b" /proc/mounts 2>/dev/null; then
+    SD_WAS_RO=true
+fi
+
 cleanup() {
     echo "Cleaning up..."
     umount "$TEMP_MOUNT" 2>/dev/null || true
     rm -rf "$WORKDIR"
-    mount -o remount,ro "$SD_MOUNT" 2>/dev/null || true
+    # Only remount read-only if it was read-only before we started
+    if [ "$SD_WAS_RO" = "true" ]; then
+        mount -o remount,ro "$SD_MOUNT" 2>/dev/null || true
+    fi
 }
 trap cleanup EXIT
 
@@ -70,9 +80,13 @@ echo "=== Setting up ${CONTAINER_NAME} container image ==="
 echo "Image: $CONTAINER_IMAGE"
 echo "Target: $SQUASHFS_PATH"
 
-# Remount SD card read-write
-echo "Remounting $SD_MOUNT read-write..."
-mount -o remount,rw "$SD_MOUNT"
+# Remount SD card read-write if needed
+if [ "$SD_WAS_RO" = "true" ]; then
+    echo "Remounting $SD_MOUNT read-write..."
+    mount -o remount,rw "$SD_MOUNT"
+else
+    echo "$SD_MOUNT is already read-write"
+fi
 
 # Remove old image if upgrading
 if [ -n "$OLD_SQUASHFS" ]; then
@@ -106,9 +120,11 @@ mksquashfs "$TEMP_MOUNT/graphroot" "$SQUASHFS_PATH" -comp zstd -noappend
 # Unmount temp storage
 umount "$TEMP_MOUNT"
 
-# Remount SD card read-only
-echo "Remounting $SD_MOUNT read-only..."
-mount -o remount,ro "$SD_MOUNT"
+# Remount SD card read-only if it was read-only before
+if [ "$SD_WAS_RO" = "true" ]; then
+    echo "Remounting $SD_MOUNT read-only..."
+    mount -o remount,ro "$SD_MOUNT"
+fi
 
 echo ""
 echo "=== Done ==="
