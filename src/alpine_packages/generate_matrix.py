@@ -22,18 +22,28 @@ def get_local_packages() -> set[str]:
     return {f.stem for f in Path(".").glob("*.yaml") if not f.name.startswith(".")}
 
 
-def extract_dependencies(pkg_data: dict, local_packages: set[str]) -> list[str]:
-    """Extract local dependencies from package data."""
-    deps = set()
+def extract_dependencies(
+    pkg_data: dict, local_packages: set[str]
+) -> tuple[list[str], list[str]]:
+    """Extract local dependencies from package data.
+
+    Returns:
+        Tuple of (build_time_deps, runtime_deps)
+    """
+    build_deps = set()
+    runtime_deps = set()
+
     # Runtime dependencies
     for dep in pkg_data.get("package", {}).get("dependencies", {}).get("runtime", []):
         if dep in local_packages:
-            deps.add(dep)
+            runtime_deps.add(dep)
+
     # Build dependencies
     for dep in pkg_data.get("environment", {}).get("contents", {}).get("packages", []):
         if dep in local_packages:
-            deps.add(dep)
-    return sorted(deps)
+            build_deps.add(dep)
+
+    return sorted(build_deps), sorted(runtime_deps)
 
 
 def compute_phases(packages: dict, already_built: set[str]) -> list[list[str]]:
@@ -154,12 +164,16 @@ def main() -> None:
             print(f"Error: {yaml_file} missing target-architecture", file=sys.stderr)
             sys.exit(1)
 
+        build_deps, runtime_deps = extract_dependencies(pkg_data, local_packages)
         packages[name] = {
             "yaml": yaml_file.name,
             "version": pkg_data["package"]["version"],
             "epoch": pkg_data["package"]["epoch"],
             "architectures": archs,
-            "local_dependencies": extract_dependencies(pkg_data, local_packages),
+            # All local deps (for phase ordering and artifact downloads)
+            "local_dependencies": sorted(set(build_deps + runtime_deps)),
+            # Only build-time deps (for rebuild propagation)
+            "build_dependencies": build_deps,
             "paths": [yaml_file.name] + ([f"{name}/**"] if Path(name).is_dir() else []),
         }
 
@@ -172,13 +186,14 @@ def main() -> None:
         if package_needs_build(name, pkg, changed_files, published_versions, rebuild_all):
             needs_build.add(name)
 
-    # Dependency propagation: if a dep rebuilds, dependents must too
+    # Dependency propagation: only rebuild if a BUILD-TIME dep rebuilds
+    # Runtime deps don't affect the package contents, just the install requirements
     changed = True
     while changed:
         changed = False
         for name, pkg in packages.items():
             if name not in needs_build:
-                if any(dep in needs_build for dep in pkg["local_dependencies"]):
+                if any(dep in needs_build for dep in pkg["build_dependencies"]):
                     needs_build.add(name)
                     changed = True
 
