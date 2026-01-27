@@ -1,0 +1,122 @@
+package:
+  name: claude-code
+  version: 2.1.19
+  epoch: 0
+  description: "Claude Code - Anthropic's agentic coding tool for the terminal"
+  copyright:
+    - license: LicenseRef-Anthropic-Commercial
+  dependencies:
+    runtime:
+      - nodejs
+      - ripgrep
+  target-architecture:
+    - x86_64
+    - aarch64
+  checks:
+    disabled:
+      - usrmerge
+  scriptlets:
+    post-install: |
+      #!/bin/sh
+      echo ""
+      echo "=== Claude Code installed ==="
+      echo ""
+      echo "Quick start:"
+      echo "  claude"
+      echo ""
+      echo "Run 'claude doctor' to verify installation."
+      echo ""
+      echo "For more information:"
+      echo "  https://docs.anthropic.com/en/docs/claude-code"
+      echo ""
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/edge/main
+      - https://dl-cdn.alpinelinux.org/alpine/edge/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+      - ca-certificates-bundle
+      - nodejs
+      - npm
+  environment:
+    npm_config_cache: /var/cache/melange/npm
+
+pipeline:
+  # Download and extract the npm package
+  - runs: |
+      # Create a temporary directory and install the package
+      mkdir -p /tmp/claude-code-install
+      cd /tmp/claude-code-install
+
+      # Initialize a minimal package.json
+      echo '{"name":"claude-code-installer","private":true}' > package.json
+
+      # Install the specific version
+      npm install @anthropic-ai/claude-code@${{package.version}}
+
+  # Install to package directory
+  - runs: |
+      appdir="${{targets.destdir}}/usr/lib/claude-code"
+      mkdir -p "$appdir"
+
+      # Copy the installed package
+      cp -r /tmp/claude-code-install/node_modules/@anthropic-ai/claude-code/* "$appdir/"
+      cp -r /tmp/claude-code-install/node_modules "$appdir/"
+
+      # Remove the duplicate nested copy
+      rm -rf "$appdir/node_modules/@anthropic-ai/claude-code"
+
+      # Remove all bundled platform-specific binaries (macOS, Windows, glibc Linux)
+      # We only keep musl Linux binaries matching the target architecture
+      rm -rf "$appdir/vendor/ripgrep/arm64-darwin"
+      rm -rf "$appdir/vendor/ripgrep/x64-darwin"
+      rm -rf "$appdir/vendor/ripgrep/x64-win32"
+      rm -rf "$appdir/vendor/ripgrep/arm64-linux"
+      rm -rf "$appdir/vendor/ripgrep/x64-linux"
+
+      # Remove node_modules for other platforms
+      find "$appdir/node_modules" -type d -name "*darwin*" -exec rm -rf {} + 2>/dev/null || true
+      find "$appdir/node_modules" -type d -name "*win32*" -exec rm -rf {} + 2>/dev/null || true
+
+      # Remove glibc-based sharp binaries, keep only linuxmusl
+      find "$appdir/node_modules" -type d -name "sharp-linux-*" -exec rm -rf {} + 2>/dev/null || true
+
+      # Create wrapper script
+      install -dm755 "${{targets.destdir}}/usr/bin"
+
+      printf '%s\n' '#!/bin/sh' \
+        'exec node /usr/lib/claude-code/cli.js "$@"' \
+        > "${{targets.destdir}}/usr/bin/claude"
+      chmod 755 "${{targets.destdir}}/usr/bin/claude"
+
+  # Create license file
+  - runs: |
+      mkdir -p "${{targets.destdir}}/usr/share/licenses/claude-code"
+      printf '%s\n' \
+        'Copyright Anthropic PBC. All rights reserved.' \
+        'Use is subject to Anthropics Commercial Terms of Service:' \
+        'https://www.anthropic.com/legal/commercial-terms' \
+        > "${{targets.destdir}}/usr/share/licenses/claude-code/LICENSE"
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/edge/main
+        - https://dl-cdn.alpinelinux.org/alpine/edge/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+  pipeline:
+    - runs: |
+        # Test that the wrapper exists and is executable
+        test -x /usr/bin/claude
+    - runs: |
+        # Test that we can invoke claude --version
+        claude --version
+    - runs: |
+        # Test that claude --help works
+        claude --help
