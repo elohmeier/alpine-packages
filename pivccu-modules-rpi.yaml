@@ -1,6 +1,6 @@
 package:
   name: pivccu-modules-rpi
-  version: 0_git20250117
+  version: 0_git20250128
   epoch: 0
   description: "Pre-built piVCCU kernel modules for linux-rpi"
   copyright:
@@ -24,10 +24,12 @@ package:
       echo "Modules installed to /usr/share/pivccu-modules/"
       echo "  - generic_raw_uart: Core raw UART framework"
       echo "  - eq3_char_loop: eQ-3 character device loop"
-      echo "  - pl011_raw_uart: PL011 UART support (RPi)"
+      echo "  - hb_rf_usb_2: USB support (HmIP-RFUSB, HB-RF-USB-2)"
+      echo "  - pl011_raw_uart: PL011 UART support (RPi GPIO)"
       echo "  - rpi_rf_mod_led: RPI-RF-MOD LED control"
       echo ""
       echo "Modules will be auto-loaded via /etc/modules-load.d/pivccu.conf"
+      echo "udev rules installed to /etc/udev/rules.d/99-pivccu.rules"
       echo ""
       # Copy dtbo to SD card if mounted
       if [ -d /media/mmcblk0p1/overlays ]; then
@@ -60,7 +62,7 @@ pipeline:
     with:
       repository: https://github.com/alexreinert/piVCCU.git
       branch: master
-      expected-commit: 8be20bf4b777bdf4cd47b25f5903c2deeeb5ae4a
+      expected-commit: c34c4204b76fb4ebb1868853be63b2271d1a7983
 
   - runs: |
       DESTDIR="${{targets.destdir}}"
@@ -85,6 +87,7 @@ pipeline:
       mkdir -p "$DESTDIR/usr/share/pivccu-modules"
       cp generic_raw_uart.ko "$DESTDIR/usr/share/pivccu-modules/"
       cp eq3_char_loop.ko "$DESTDIR/usr/share/pivccu-modules/"
+      cp hb_rf_usb_2.ko "$DESTDIR/usr/share/pivccu-modules/"
       cp pl011_raw_uart.ko "$DESTDIR/usr/share/pivccu-modules/"
       cp rpi_rf_mod_led.ko "$DESTDIR/usr/share/pivccu-modules/"
 
@@ -94,9 +97,24 @@ pipeline:
       # piVCCU kernel modules for HomeMatic RF hardware
       generic_raw_uart
       eq3_char_loop
+      hb_rf_usb_2
       EOF
       # Remove leading whitespace from pivccu.conf
       sed -i 's/^      //' "$DESTDIR/etc/modules-load.d/pivccu.conf"
+
+      # Install udev rules for Homematic USB devices
+      mkdir -p "$DESTDIR/etc/udev/rules.d"
+      cat > "$DESTDIR/etc/udev/rules.d/99-pivccu.rules" << 'EOF'
+      # piVCCU udev rules for HomeMatic RF hardware
+      # HmIP-RFUSB
+      ATTRS{idVendor}=="1b1f", ATTRS{idProduct}=="c020", ENV{ID_MM_DEVICE_IGNORE}="1"
+      # HM-CFG-USB-2
+      ATTRS{idVendor}=="1b1f", ATTRS{idProduct}=="c00f", ENV{ID_MM_DEVICE_IGNORE}="1"
+      # HB-RF-USB / HB-RF-USB-2
+      ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6f70", ENV{ID_MM_DEVICE_IGNORE}="1"
+      ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="8c07", ENV{ID_MM_DEVICE_IGNORE}="1"
+      EOF
+      sed -i 's/^      //' "$DESTDIR/etc/udev/rules.d/99-pivccu.rules"
 
       # Compile and install device tree overlay
       mkdir -p "$DESTDIR/boot/overlays"
@@ -118,6 +136,7 @@ test:
         # Test that module files exist
         test -f /usr/share/pivccu-modules/generic_raw_uart.ko
         test -f /usr/share/pivccu-modules/eq3_char_loop.ko
+        test -f /usr/share/pivccu-modules/hb_rf_usb_2.ko
         test -f /usr/share/pivccu-modules/pl011_raw_uart.ko
         test -f /usr/share/pivccu-modules/rpi_rf_mod_led.ko
 
@@ -125,6 +144,11 @@ test:
         test -f /etc/modules-load.d/pivccu.conf
         grep -q "generic_raw_uart" /etc/modules-load.d/pivccu.conf
         grep -q "eq3_char_loop" /etc/modules-load.d/pivccu.conf
+        grep -q "hb_rf_usb_2" /etc/modules-load.d/pivccu.conf
+
+        # Test udev rules
+        test -f /etc/udev/rules.d/99-pivccu.rules
+        grep -q "1b1f.*c020" /etc/udev/rules.d/99-pivccu.rules
 
         # Test device tree overlay exists
         test -f /boot/overlays/pivccu-raspberrypi.dtbo

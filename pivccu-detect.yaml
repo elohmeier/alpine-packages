@@ -1,6 +1,6 @@
 package:
   name: pivccu-detect
-  version: 0_git20250117
+  version: 0_git20250128
   epoch: 0
   description: "HomeMatic RF hardware detection tool"
   copyright:
@@ -29,7 +29,7 @@ pipeline:
     with:
       repository: https://github.com/alexreinert/piVCCU.git
       branch: master
-      expected-commit: 8be20bf4b777bdf4cd47b25f5903c2deeeb5ae4a
+      expected-commit: c34c4204b76fb4ebb1868853be63b2271d1a7983
 
   - runs: |
       cd detect_radio_module
