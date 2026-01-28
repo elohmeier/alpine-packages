@@ -6,8 +6,9 @@ description="Open Home Foundation Matter Server"
 command="/usr/bin/matter-server"
 command_args="$MATTER_SERVER_OPTS"
 command_user="${MATTER_USER:-matter}"
-command_background=true
-pidfile="/run/${RC_SVCNAME}.pid"
+
+supervisor=supervise-daemon
+supervise_daemon_args="--respawn-delay 2 --respawn-max 5 --respawn-period 1800"
 output_log="/var/log/${RC_SVCNAME}.log"
 error_log="/var/log/${RC_SVCNAME}.log"
 
@@ -19,6 +20,9 @@ depend() {
 start_pre() {
 	# Ensure data directory exists with correct ownership
 	checkpath --directory --owner "$command_user" /var/lib/matter-server
+
+	# Fix ownership of any existing files (e.g., after root-mode recovery)
+	chown -R "$command_user" /var/lib/matter-server
 
 	# Ensure PAA root cert directory exists
 	checkpath --directory --owner "$command_user" /var/lib/matter-server/paa-root-certs
