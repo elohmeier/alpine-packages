@@ -52,6 +52,12 @@ apk update
 | ------------- | ---------------------------------------------------------------------- | --------------- |
 | **python314** | Python 3.14 - High-level scripting language with PGO/LTO optimizations | x86_64, aarch64 |
 
+### Document Management
+
+| Package                  | Description                                                      | Architectures   |
+| ------------------------ | ---------------------------------------------------------------- | --------------- |
+| **ftp-paperless-bridge** | FTP server bridge for network document scanners to paperless-ngx | x86_64, aarch64 |
+
 ### Utilities
 
 | Package        | Description                          | Architectures   |
@@ -245,6 +251,24 @@ apk add python314
 - **Binary:** `/usr/bin/python3.14`
 - **Features:** PGO, LTO, zstd compression (stdlib), shared library
 - **Note:** Available for projects requiring Python 3.14
+
+### ftp-paperless-bridge
+
+FTP server that accepts scanned documents from network-enabled scanners and forwards them to paperless-ngx.
+
+```sh
+apk add ftp-paperless-bridge
+# Edit configuration first:
+vi /etc/conf.d/ftp-paperless-bridge
+rc-service ftp-paperless-bridge start
+rc-update add ftp-paperless-bridge default
+```
+
+- **Ports:** 2121 (FTP), 2122-2124 (passive mode)
+- **Config:** `/etc/conf.d/ftp-paperless-bridge`
+- **Required settings:** `FTP_PAPERLESS_BRIDGE_PAPERLESS_URL`, `FTP_PAPERLESS_BRIDGE_PAPERLESS_API_TOKEN`, change default `FTP_PAPERLESS_BRIDGE_PASSWORD`
+
+Point your scanner's FTP upload to `<host>:2121` with the configured credentials.
 
 ### vector
 

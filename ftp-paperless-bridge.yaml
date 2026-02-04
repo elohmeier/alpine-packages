@@ -1,0 +1,96 @@
+package:
+  name: ftp-paperless-bridge
+  version: "0.2.1"
+  epoch: 0
+  description: "FTP server bridge for network document scanners to paperless-ngx"
+  copyright:
+    - license: Apache-2.0
+  target-architecture:
+    - x86_64
+    - aarch64
+  checks:
+    disabled:
+      - usrmerge
+  scriptlets:
+    pre-install: |
+      #!/bin/sh
+      addgroup -S paperless 2>/dev/null || true
+      adduser -S -D -H -h /nonexistent -s /sbin/nologin -G paperless -g paperless paperless 2>/dev/null || true
+      exit 0
+    post-install: |
+      #!/bin/sh
+      echo ""
+      echo "=== ftp-paperless-bridge installed ==="
+      echo ""
+      echo "Quick start:"
+      echo "  1. Edit /etc/conf.d/ftp-paperless-bridge"
+      echo "     - Set FTP_PAPERLESS_BRIDGE_PAPERLESS_URL"
+      echo "     - Set FTP_PAPERLESS_BRIDGE_PAPERLESS_API_TOKEN"
+      echo "     - Change FTP_PAPERLESS_BRIDGE_PASSWORD"
+      echo "  2. rc-service ftp-paperless-bridge start"
+      echo "  3. rc-update add ftp-paperless-bridge default"
+      echo ""
+      echo "Ports:"
+      echo "  2121       FTP server"
+      echo "  2122-2124  FTP passive mode"
+      echo ""
+      echo "Logs:"
+      echo "  /var/log/ftp-paperless-bridge.log"
+      echo "  /var/log/ftp-paperless-bridge.err"
+      echo ""
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/edge/main
+      - https://dl-cdn.alpinelinux.org/alpine/edge/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - build-base
+      - busybox
+      - ca-certificates
+      - cargo
+      - openssl-dev
+      - rust
+  environment:
+    CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/elohmeier/ftp-paperless-bridge.git
+      branch: main
+      expected-commit: 22592f2952a82220630401d037db9cd1ad59a797
+
+  - runs: |
+      cargo fetch --locked
+
+  - runs: |
+      cargo build --release --frozen
+
+      install -Dm755 target/release/${{package.name}} \
+        "${{targets.destdir}}"/usr/bin/${{package.name}}
+
+  - uses: strip
+
+  - runs: |
+      install -Dm755 ftp-paperless-bridge/ftp-paperless-bridge.initd \
+        "${{targets.destdir}}"/etc/init.d/ftp-paperless-bridge
+      install -Dm644 ftp-paperless-bridge/ftp-paperless-bridge.confd \
+        "${{targets.destdir}}"/etc/conf.d/ftp-paperless-bridge
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/edge/main
+        - https://dl-cdn.alpinelinux.org/alpine/edge/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+  pipeline:
+    - runs: |
+        ftp-paperless-bridge --version
+        ftp-paperless-bridge --help
