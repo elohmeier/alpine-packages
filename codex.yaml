@@ -23,41 +23,34 @@ environment:
       - ca-certificates-bundle
 
 pipeline:
+  - uses: fetch
+    with:
+      uri: https://github.com/openai/codex/releases/download/rust-v${{package.version}}/codex-${{build.arch}}-unknown-linux-musl.tar.gz
+      extract: false
+
   - runs: |
-      # Set architecture-specific variables
+      # Verify checksum
       case "${{build.arch}}" in
         x86_64)
-          ARCH_TRIPLE="x86_64-unknown-linux-musl"
           EXPECTED_SHA256="0d6184f8d9f8da235217bedeb699d47ad914bcd8169ac0b701c248e2b14bbb3f"
           ;;
         aarch64)
-          ARCH_TRIPLE="aarch64-unknown-linux-musl"
           EXPECTED_SHA256="acfbd0b3bacd18558faba9c41f074038a70c680006098fc58c0326eace3f3cc8"
           ;;
-        *)
-          echo "Unsupported architecture: ${{build.arch}}" >&2
-          exit 1
-          ;;
       esac
-
-      TARBALL="codex-${ARCH_TRIPLE}.tar.gz"
-      URL="https://github.com/openai/codex/releases/download/rust-v${{package.version}}/${TARBALL}"
-
-      # Download and verify
-      wget -q -O "/tmp/${TARBALL}" "${URL}"
-      echo "${EXPECTED_SHA256}  /tmp/${TARBALL}" | sha256sum -c -
+      echo "${EXPECTED_SHA256}  codex-${{build.arch}}-unknown-linux-musl.tar.gz" | sha256sum -c -
 
       # Extract and install
-      tar -xzf "/tmp/${TARBALL}" -C /tmp/
-      install -Dm755 "/tmp/codex-${ARCH_TRIPLE}" "${{targets.destdir}}/usr/bin/codex"
+      tar -xzf "codex-${{build.arch}}-unknown-linux-musl.tar.gz"
+      install -Dm755 "codex-${{build.arch}}-unknown-linux-musl" "${{targets.destdir}}/usr/bin/codex"
 
   - runs: |
       mkdir -p "${{targets.destdir}}/usr/share/licenses/codex"
-      cat > "${{targets.destdir}}/usr/share/licenses/codex/LICENSE" <<'EOF'
-      Copyright 2025 OpenAI
-      Licensed under the Apache License, Version 2.0
-      https://github.com/openai/codex/blob/main/LICENSE
-      EOF
+      printf '%s\n' \
+        'Copyright 2025 OpenAI' \
+        'Licensed under the Apache License, Version 2.0' \
+        'https://github.com/openai/codex/blob/main/LICENSE' \
+        > "${{targets.destdir}}/usr/share/licenses/codex/LICENSE"
 
 test:
   environment:
