@@ -73,7 +73,7 @@ jobs:
         with:
           package: ${{ matrix.package }}
           arch: ${{ matrix.arch }}
-          signing-key: ${{ secrets.ABUILD_PRIVKEY }}
+          signing-key: ${{ github.ref == 'refs/heads/main' && secrets.ABUILD_PRIVKEY || '' }}
           repo-url: ${{ env.REPO_URL }}
           local-dependencies: ${{ steps.pkg.outputs.local-deps }}
 
@@ -114,7 +114,7 @@ jobs:
         with:
           package: ${{ matrix.package }}
           arch: ${{ matrix.arch }}
-          signing-key: ${{ secrets.ABUILD_PRIVKEY }}
+          signing-key: ${{ github.ref == 'refs/heads/main' && secrets.ABUILD_PRIVKEY || '' }}
           repo-url: ${{ env.REPO_URL }}
           local-dependencies: ${{ steps.pkg.outputs.local-deps }}
 
@@ -155,7 +155,7 @@ jobs:
         with:
           package: ${{ matrix.package }}
           arch: ${{ matrix.arch }}
-          signing-key: ${{ secrets.ABUILD_PRIVKEY }}
+          signing-key: ${{ github.ref == 'refs/heads/main' && secrets.ABUILD_PRIVKEY || '' }}
           repo-url: ${{ env.REPO_URL }}
           local-dependencies: ${{ steps.pkg.outputs.local-deps }}
 
