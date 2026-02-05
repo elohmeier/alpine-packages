@@ -64,6 +64,12 @@ apk update
 | -------------- | ------------------------------------ | --------------- |
 | **ssh-to-age** | Convert SSH Ed25519 keys to age keys | x86_64, aarch64 |
 
+### AI / Developer Tools
+
+| Package    | Description                                        | Architectures   |
+| ---------- | -------------------------------------------------- | --------------- |
+| **codex**  | OpenAI Codex CLI - coding agent for the terminal   | x86_64, aarch64 |
+
 ### Observability
 
 | Package    | Description                                                                | Architectures   |

@@ -1,0 +1,78 @@
+package:
+  name: codex
+  version: "0.97.0"
+  epoch: 0
+  description: "OpenAI Codex CLI - coding agent for the terminal"
+  copyright:
+    - license: Apache-2.0
+  target-architecture:
+    - x86_64
+    - aarch64
+  checks:
+    disabled:
+      - usrmerge
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/edge/main
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+      - ca-certificates-bundle
+
+pipeline:
+  - runs: |
+      # Set architecture-specific variables
+      case "${{build.arch}}" in
+        x86_64)
+          ARCH_TRIPLE="x86_64-unknown-linux-musl"
+          EXPECTED_SHA256="0d6184f8d9f8da235217bedeb699d47ad914bcd8169ac0b701c248e2b14bbb3f"
+          ;;
+        aarch64)
+          ARCH_TRIPLE="aarch64-unknown-linux-musl"
+          EXPECTED_SHA256="acfbd0b3bacd18558faba9c41f074038a70c680006098fc58c0326eace3f3cc8"
+          ;;
+        *)
+          echo "Unsupported architecture: ${{build.arch}}" >&2
+          exit 1
+          ;;
+      esac
+
+      TARBALL="codex-${ARCH_TRIPLE}.tar.gz"
+      URL="https://github.com/openai/codex/releases/download/rust-v${{package.version}}/${TARBALL}"
+
+      # Download and verify
+      wget -q -O "/tmp/${TARBALL}" "${URL}"
+      echo "${EXPECTED_SHA256}  /tmp/${TARBALL}" | sha256sum -c -
+
+      # Extract and install
+      tar -xzf "/tmp/${TARBALL}" -C /tmp/
+      install -Dm755 "/tmp/codex-${ARCH_TRIPLE}" "${{targets.destdir}}/usr/bin/codex"
+
+  - runs: |
+      mkdir -p "${{targets.destdir}}/usr/share/licenses/codex"
+      cat > "${{targets.destdir}}/usr/share/licenses/codex/LICENSE" <<'EOF'
+      Copyright 2025 OpenAI
+      Licensed under the Apache License, Version 2.0
+      https://github.com/openai/codex/blob/main/LICENSE
+      EOF
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/edge/main
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+  pipeline:
+    - runs: |
+        # Test that binary exists and is executable
+        test -x /usr/bin/codex
+    - runs: |
+        # Test that codex --version works
+        codex --version
+    - runs: |
+        # Test that codex --help works
+        codex --help
