@@ -9,8 +9,9 @@ inputs:
     description: Target architecture
     required: true
   signing-key:
-    description: Private signing key content
-    required: true
+    description: Private signing key content (if empty, generates an ephemeral key)
+    required: false
+    default: ""
   repo-url:
     description: Published repo URL for fetching dependencies
     required: true
@@ -29,11 +30,16 @@ runs:
     - name: Setup signing key
       shell: bash
       run: |
-        echo "${{ inputs.signing-key }}" > melange.pem
-        openssl rsa -in melange.pem -out packages@elohmeier.rsa -traditional 2>/dev/null || cp melange.pem packages@elohmeier.rsa
-        openssl rsa -in packages@elohmeier.rsa -pubout -out packages@elohmeier.rsa.pub
-        chmod 600 packages@elohmeier.rsa
-        rm -f melange.pem
+        if [[ -n "${{ inputs.signing-key }}" ]]; then
+          echo "${{ inputs.signing-key }}" > melange.pem
+          openssl rsa -in melange.pem -out packages@elohmeier.rsa -traditional 2>/dev/null || cp melange.pem packages@elohmeier.rsa
+          openssl rsa -in packages@elohmeier.rsa -pubout -out packages@elohmeier.rsa.pub
+          chmod 600 packages@elohmeier.rsa
+          rm -f melange.pem
+        else
+          echo "No signing key provided, generating ephemeral key for build validation"
+          melange keygen packages@elohmeier.rsa
+        fi
 
     - name: Setup cache directory
       shell: bash
