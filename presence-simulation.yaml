@@ -1,0 +1,64 @@
+package:
+  name: presence-simulation
+  version: "5.1"
+  epoch: 0
+  description: "Home Assistant custom integration for presence simulation"
+  copyright:
+    - license: Apache-2.0
+  target-architecture:
+    - x86_64
+    - aarch64
+  scriptlets:
+    post-install: |
+      #!/bin/sh
+      chown -R homeassistant:homeassistant /var/lib/homeassistant/custom_components/presence_simulation 2>/dev/null || true
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/slashback100/presence_simulation.git
+      tag: v${{package.version}}
+      expected-commit: 764da6e3484bdcbb776e5aa1b5e2e80c556fc7cd
+
+  - runs: |
+      install -dm755 "${{targets.destdir}}/var/lib/homeassistant/custom_components"
+      cp -r custom_components/presence_simulation \
+        "${{targets.destdir}}/var/lib/homeassistant/custom_components/"
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+        - python3
+  pipeline:
+    - runs: |
+        # Test that the custom component files exist
+        test -d /var/lib/homeassistant/custom_components/presence_simulation
+        test -f /var/lib/homeassistant/custom_components/presence_simulation/__init__.py
+        test -f /var/lib/homeassistant/custom_components/presence_simulation/manifest.json
+    - runs: |
+        # Verify manifest.json is valid JSON and contains expected fields
+        python3 -c "
+        import json
+        with open('/var/lib/homeassistant/custom_components/presence_simulation/manifest.json') as f:
+            m = json.load(f)
+            assert m['domain'] == 'presence_simulation', 'Wrong domain'
+            assert 'version' in m, 'Missing version'
+            print(f\"Presence Simulation v{m['version']} installed successfully\")
+        "
