@@ -160,6 +160,99 @@ REBUILD_ALL=true uv run generate-matrix
 BASE_REF=HEAD~1 uv run generate-matrix
 ```
 
+## Home Assistant Custom Component Packages
+
+For packaging Home Assistant custom integrations (installed via HACS or manually) as Alpine packages.
+
+### Reference: presence-simulation, adaptive-lighting, ha-pysmaplus
+
+These packages follow an identical pattern — clone the upstream repo and copy the `custom_components/<domain>/` directory into `/var/lib/homeassistant/custom_components/`.
+
+### Template
+
+```yaml
+package:
+  name: <package-name>
+  version: "<upstream-version>"
+  epoch: 0
+  description: "Home Assistant custom integration for <description>"
+  copyright:
+    - license: Apache-2.0
+  target-architecture:
+    - x86_64
+    - aarch64
+  scriptlets:
+    post-install: |
+      #!/bin/sh
+      chown -R homeassistant:homeassistant /var/lib/homeassistant/custom_components/<domain> 2>/dev/null || true
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/<owner>/<repo>.git
+      tag: v${{package.version}}
+      expected-commit: <commit-sha>
+
+  - runs: |
+      install -dm755 "${{targets.destdir}}/var/lib/homeassistant/custom_components"
+      cp -r custom_components/<domain> \
+        "${{targets.destdir}}/var/lib/homeassistant/custom_components/"
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+        - python3
+  pipeline:
+    - runs: |
+        test -d /var/lib/homeassistant/custom_components/<domain>
+        test -f /var/lib/homeassistant/custom_components/<domain>/__init__.py
+        test -f /var/lib/homeassistant/custom_components/<domain>/manifest.json
+    - runs: |
+        python3 -c "
+        import json
+        with open('/var/lib/homeassistant/custom_components/<domain>/manifest.json') as f:
+            m = json.load(f)
+            assert m['domain'] == '<domain>', 'Wrong domain'
+            assert 'version' in m, 'Missing version'
+            print(f\"<Name> v{m['version']} installed successfully\")
+        "
+```
+
+### Steps to add a new HA custom component
+
+1. Find the upstream repo and latest release tag
+2. Get the tag's commit SHA: `gh api repos/<owner>/<repo>/git/refs/tags/<tag> --jq '.object.sha'`
+3. Check the `custom_components/<domain>/manifest.json` for the domain name and Python requirements
+4. Create `<package-name>.yaml` using the template above, replacing `<domain>`, `<owner>/<repo>`, `<commit-sha>`, etc.
+5. Build locally: `melange build <package-name>.yaml`
+6. Verify contents: `tar -tzf packages/aarch64/<package-name>-<version>.apk`
+7. Commit and push — CI builds and publishes to GitHub Pages
+8. Install on target: `apk update && apk add <package-name>`
+9. Restart Home Assistant and configure the integration from the UI
+
+### Notes
+
+- HA auto-installs Python dependencies listed in `manifest.json` `requirements` on first load — no need to package them separately
+- The `post-install` scriptlet ensures correct ownership for the homeassistant user
+- The `<domain>` is the directory name under `custom_components/` and the `domain` field in `manifest.json` (e.g., `pysmaplus`, `adaptive_lighting`, `presence_simulation`)
+
 ## Podman Container Packages
 
 For wrapping container images as Alpine packages with OpenRC integration and diskless system support, use `podman-container-common` as a dependency.
