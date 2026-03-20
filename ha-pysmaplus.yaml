@@ -1,0 +1,64 @@
+package:
+  name: ha-pysmaplus
+  version: "0.5.2"
+  epoch: 0
+  description: "Home Assistant custom integration for SMA devices (Speedwire + WebConnect)"
+  copyright:
+    - license: Apache-2.0
+  target-architecture:
+    - x86_64
+    - aarch64
+  scriptlets:
+    post-install: |
+      #!/bin/sh
+      chown -R homeassistant:homeassistant /var/lib/homeassistant/custom_components/pysmaplus 2>/dev/null || true
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/littleyoda/ha-pysmaplus.git
+      tag: v${{package.version}}
+      expected-commit: 191d1817c64f283fd1aafd9283329ae8867676f7
+
+  - runs: |
+      install -dm755 "${{targets.destdir}}/var/lib/homeassistant/custom_components"
+      cp -r custom_components/pysmaplus \
+        "${{targets.destdir}}/var/lib/homeassistant/custom_components/"
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+        - python3
+  pipeline:
+    - runs: |
+        # Test that the custom component files exist
+        test -d /var/lib/homeassistant/custom_components/pysmaplus
+        test -f /var/lib/homeassistant/custom_components/pysmaplus/__init__.py
+        test -f /var/lib/homeassistant/custom_components/pysmaplus/manifest.json
+    - runs: |
+        # Verify manifest.json is valid JSON and contains expected fields
+        python3 -c "
+        import json
+        with open('/var/lib/homeassistant/custom_components/pysmaplus/manifest.json') as f:
+            m = json.load(f)
+            assert m['domain'] == 'pysmaplus', 'Wrong domain'
+            assert 'version' in m, 'Missing version'
+            print(f\"SMA Devices Plus v{m['version']} installed successfully\")
+        "
