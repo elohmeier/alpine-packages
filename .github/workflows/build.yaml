@@ -103,7 +103,7 @@ jobs:
 
       # Download artifacts from Phase 1 for dependencies
       - name: Download dependency artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: packages-${{ matrix.arch }}-*
           path: packages/${{ matrix.arch }}
@@ -144,7 +144,7 @@ jobs:
 
       # Download artifacts from previous phases for dependencies
       - name: Download dependency artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: packages-${{ matrix.arch }}-*
           path: packages/${{ matrix.arch }}
@@ -191,7 +191,7 @@ jobs:
           rm -f melange.pem
 
       # Download all newly built artifacts
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
           pattern: packages-*
