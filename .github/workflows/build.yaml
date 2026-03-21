@@ -29,7 +29,7 @@ jobs:
       phases: ${{ steps.matrix.outputs.phases }}
       any-builds: ${{ steps.matrix.outputs.any-builds }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -61,7 +61,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.generate-matrix.outputs.phases)[0] }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Get package info
         id: pkg
@@ -93,7 +93,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.generate-matrix.outputs.phases)[1] }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Get package info
         id: pkg
@@ -134,7 +134,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.generate-matrix.outputs.phases)[2] }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Get package info
         id: pkg
@@ -176,7 +176,7 @@ jobs:
     environment:
       name: github-pages
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: chainguard-dev/actions/setup-melange@main
         with:
