@@ -3,6 +3,10 @@
   "extends": ["config:recommended"],
   "mode": "full",
   "dependencyDashboard": true,
+  "automerge": true,
+  "automergeType": "pr",
+  "platformAutomerge": false,
+  "ignoreTests": false,
   "customManagers": [
     {
       "customType": "regex",
@@ -124,14 +128,9 @@
       ]
     },
     {
-      "description": "Automerge patch updates for custom components",
-      "matchDepNames": [
-        "basnijholt/adaptive-lighting",
-        "littleyoda/ha-pysmaplus",
-        "slashback100/presence_simulation"
-      ],
-      "matchUpdateTypes": ["patch"],
-      "automerge": true
+      "description": "Do not automerge major updates",
+      "matchUpdateTypes": ["major"],
+      "automerge": false
     }
   ]
 }
