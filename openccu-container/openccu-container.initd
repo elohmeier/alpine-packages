@@ -54,6 +54,19 @@ start() {
         ${CONTAINER_EXTRA_OPTS} \
         "$CONTAINER_IMAGE" >/dev/null 2>&1
     eend $?
+}
+
+start_post() {
+    # Wait for OpenCCU to finish booting (sets up its iptables firewall)
+    local i=0
+    while [ $i -lt 120 ]; do
+        if podman exec "$CONTAINER_NAME" \
+            iptables -L INPUT -n 2>/dev/null | grep -q "policy DROP"; then
+            break
+        fi
+        sleep 2
+        i=$((i + 2))
+    done
 
     # Open XML-RPC ports in OpenCCU's internal firewall
     local port
