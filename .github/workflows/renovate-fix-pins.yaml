@@ -1,0 +1,29 @@
+name: Fix Renovate Pins
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ["*.yaml"]
+
+jobs:
+  fix-pins:
+    if: startsWith(github.head_ref, 'renovate/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve expected-commit SHAs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/resolve-pins.sh
+
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "fix: update expected-commit SHAs"
+          file_pattern: "*.yaml"

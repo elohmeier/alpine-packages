@@ -1,0 +1,135 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Container packages (version = container image tag)",
+      "fileMatch": ["^home-assistant-container\\.yaml$"],
+      "matchStrings": [
+        "version: (?<currentValue>[^\\n]+)"
+      ],
+      "depNameTemplate": "ghcr.io/home-assistant/home-assistant",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "OpenCCU container",
+      "fileMatch": ["^openccu-container\\.yaml$"],
+      "matchStrings": [
+        "version: (?<currentValue>[^\\n]+)"
+      ],
+      "depNameTemplate": "ghcr.io/openccu/openccu",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Podinfo container",
+      "fileMatch": ["^podinfo-container\\.yaml$"],
+      "matchStrings": [
+        "version: (?<currentValue>[^\\n]+)"
+      ],
+      "depNameTemplate": "ghcr.io/stefanprodan/podinfo",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "GitHub repos with tag v$version",
+      "fileMatch": [
+        "^adaptive-lighting\\.yaml$",
+        "^ha-pysmaplus\\.yaml$",
+        "^presence-simulation\\.yaml$",
+        "^zwave-js-ui\\.yaml$",
+        "^zap-cli\\.yaml$",
+        "^vector\\.yaml$"
+      ],
+      "matchStrings": [
+        "version: \"?(?<currentValue>[^\"\\n]+)\"?\\n[\\s\\S]*?repository: https://github\\.com/(?<depName>[^\\n]+)\\.git\\n\\s+tag: v\\$"
+      ],
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "GitHub repos with tag $version (no v prefix)",
+      "fileMatch": ["^ssh-to-age\\.yaml$"],
+      "matchStrings": [
+        "version: \"?(?<currentValue>[^\"\\n]+)\"?\\n[\\s\\S]*?repository: https://github\\.com/(?<depName>[^\\n]+)\\.git\\n\\s+tag: \\$"
+      ],
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "npm packages (claude-code)",
+      "fileMatch": ["^claude-code\\.yaml$"],
+      "matchStrings": [
+        "version: (?<currentValue>[^\\n]+)\\n[\\s\\S]*?npm install (?<depName>@[^@]+)@"
+      ],
+      "datasourceTemplate": "npm"
+    },
+    {
+      "customType": "regex",
+      "description": "PyPI packages (pip wheel with ==$version)",
+      "fileMatch": [
+        "^matter-server\\.yaml$",
+        "^universal-silabs-flasher\\.yaml$",
+        "^prusalink\\.yaml$"
+      ],
+      "matchStrings": [
+        "version: \"?(?<currentValue>[^\"\\n]+)\"?\\n[\\s\\S]*?pip wheel[\\s\\S]*?\"(?<depName>[a-zA-Z][a-zA-Z0-9_-]+)==\\$\\{\\{package\\.version\\}\\}\""
+      ],
+      "datasourceTemplate": "pypi"
+    },
+    {
+      "customType": "regex",
+      "description": "Codex GitHub release binary",
+      "fileMatch": ["^codex\\.yaml$"],
+      "matchStrings": [
+        "version: \"?(?<currentValue>[^\"\\n]+)\"?\\n[\\s\\S]*?https://github\\.com/(?<depName>[^/]+/[^/]+)/releases/"
+      ],
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^rust-v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Python source tarball",
+      "fileMatch": ["^python314\\.yaml$"],
+      "matchStrings": [
+        "version: (?<currentValue>3\\.14\\.[^\\n]+)"
+      ],
+      "depNameTemplate": "python/cpython",
+      "datasourceTemplate": "github-tags",
+      "extractVersionTemplate": "^v(?<version>3\\.14\\..+)$"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Group Home Assistant ecosystem updates",
+      "groupName": "Home Assistant ecosystem",
+      "matchDepNames": [
+        "ghcr.io/home-assistant/home-assistant",
+        "python-matter-server",
+        "universal-silabs-flasher"
+      ]
+    },
+    {
+      "description": "Group HA custom components",
+      "groupName": "HA custom components",
+      "matchDepNames": [
+        "basnijholt/adaptive-lighting",
+        "littleyoda/ha-pysmaplus",
+        "slashback100/presence_simulation"
+      ]
+    },
+    {
+      "description": "Automerge patch updates for custom components",
+      "matchDepNames": [
+        "basnijholt/adaptive-lighting",
+        "littleyoda/ha-pysmaplus",
+        "slashback100/presence_simulation"
+      ],
+      "matchUpdateTypes": ["patch"],
+      "automerge": true
+    }
+  ]
+}
