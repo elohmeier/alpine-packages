@@ -23,7 +23,7 @@ jobs:
         run: bash scripts/resolve-pins.sh
 
       - name: Commit changes
-        uses: stefanzweifel/git-auto-commit-action@v5
+        uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "fix: update expected-commit SHAs"
           file_pattern: "*.yaml"
