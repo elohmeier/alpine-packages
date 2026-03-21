@@ -1,6 +1,6 @@
 package:
   name: python314
-  version: 3.14.2
+  version: 3.14.3
   epoch: 2
   description: "Python 3.14 - High-level scripting language"
   copyright:
@@ -62,7 +62,7 @@ pipeline:
   - uses: fetch
     with:
       uri: https://www.python.org/ftp/python/${{package.version}}/Python-${{package.version}}.tar.xz
-      expected-sha256: ce543ab854bc256b61b71e9b27f831ffd1bfd60a479d639f8be7f9757cf573e9
+      expected-sha256: a97d5549e9ad81fe17159ed02c68774ad5d266c72f8d9a0b5a9c371fe85d902b
 
   # Apply musl compatibility patch
   - runs: |
