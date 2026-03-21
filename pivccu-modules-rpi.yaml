@@ -1,7 +1,7 @@
 package:
   name: pivccu-modules-rpi
   version: 0_git20250128
-  epoch: 0
+  epoch: 1
   description: "Pre-built piVCCU kernel modules for linux-rpi"
   copyright:
     - license: GPL-2.0-only
