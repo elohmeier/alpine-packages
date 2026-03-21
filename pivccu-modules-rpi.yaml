@@ -18,29 +18,26 @@ package:
   scriptlets:
     post-install: |
       #!/bin/sh
-      echo ""
-      echo "=== piVCCU Kernel Modules Installed ==="
-      echo ""
-      echo "Modules installed to /usr/share/pivccu-modules/"
-      echo "  - generic_raw_uart: Core raw UART framework"
-      echo "  - eq3_char_loop: eQ-3 character device loop"
-      echo "  - hb_rf_usb_2: USB support (HmIP-RFUSB, HB-RF-USB-2)"
-      echo "  - pl011_raw_uart: PL011 UART support (RPi GPIO)"
-      echo "  - rpi_rf_mod_led: RPI-RF-MOD LED control"
-      echo ""
-      echo "Modules will be auto-loaded via /etc/modules-load.d/pivccu.conf"
-      echo "udev rules installed to /etc/udev/rules.d/99-pivccu.rules"
-      echo ""
+      # Install modules into running kernel's module tree
+      KVER=$(uname -r)
+      mkdir -p /lib/modules/$KVER/extra
+      for mod in /usr/share/pivccu-modules/*.ko; do
+        cp "$mod" /lib/modules/$KVER/extra/
+      done
+      depmod -a "$KVER"
+
       # Copy dtbo to SD card if mounted
       if [ -d /media/mmcblk0p1/overlays ]; then
         cp /boot/overlays/pivccu-raspberrypi.dtbo /media/mmcblk0p1/overlays/
-        echo "Device tree overlay copied to /media/mmcblk0p1/overlays/"
-        echo "Add 'dtoverlay=pivccu-raspberrypi' to /media/mmcblk0p1/usercfg.txt"
-      else
-        echo "Device tree overlay installed to /boot/overlays/"
-        echo "For diskless boot, copy to your boot partition"
       fi
-      echo ""
+    post-upgrade: |
+      #!/bin/sh
+      KVER=$(uname -r)
+      mkdir -p /lib/modules/$KVER/extra
+      for mod in /usr/share/pivccu-modules/*.ko; do
+        cp "$mod" /lib/modules/$KVER/extra/
+      done
+      depmod -a "$KVER"
 
 environment:
   contents:
