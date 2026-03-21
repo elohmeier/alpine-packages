@@ -57,7 +57,7 @@ pipeline:
     with:
       repository: https://github.com/vectordotdev/vector.git
       tag: v${{package.version}}
-      expected-commit: ca5bf2690ffcfc2c95d320cf7156b1df1b28a080
+      expected-commit: 2b8b875681fbf4ef8da827650f75e936f16a36a4
 
   - runs: |
       # Patch Cargo.toml to use system rdkafka with dynamic linking and system gssapi
