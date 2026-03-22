@@ -26,7 +26,8 @@
         "version: (?<currentValue>[^\\n]+)"
       ],
       "depNameTemplate": "ghcr.io/openccu/openccu",
-      "datasourceTemplate": "docker"
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\.(?<build>\\d+)$"
     },
     {
       "customType": "regex",
@@ -126,6 +127,11 @@
         "littleyoda/ha-pysmaplus",
         "slashback100/presence_simulation"
       ]
+    },
+    {
+      "description": "OpenCCU: only use clean version tags (no commit hash suffix)",
+      "matchDepNames": ["ghcr.io/openccu/openccu"],
+      "allowedVersions": "/^\\d+\\.\\d+\\.\\d+\\.\\d+$/"
     },
     {
       "description": "Do not automerge major updates",
