@@ -41,7 +41,7 @@ package:
       if [ -d /media/mmcblk0p1 ] || [ -d /media/sda1 ] || [ -d /media/usb ]; then
         echo "Diskless system detected. Setting up container image..."
         . /etc/conf.d/home-assistant-container
-        setup-container-image home-assistant "$CONTAINER_IMAGE"
+        SKIP_RO_REMOUNT=1 setup-container-image home-assistant "$CONTAINER_IMAGE"
       fi
 
       echo ""
@@ -59,7 +59,7 @@ package:
       if [ -d /media/mmcblk0p1 ] || [ -d /media/sda1 ] || [ -d /media/usb ]; then
         echo "Upgrading Home Assistant container image..."
         . /etc/conf.d/home-assistant-container
-        setup-container-image home-assistant "$CONTAINER_IMAGE" --upgrade
+        SKIP_RO_REMOUNT=1 setup-container-image home-assistant "$CONTAINER_IMAGE" --upgrade
       fi
 
 environment:

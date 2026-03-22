@@ -61,7 +61,10 @@ TEMP_MOUNT="$WORKDIR/storage"
 # Check if SD card is already mounted read-write
 # We only remount to read-only at the end if we changed it
 SD_WAS_RO=false
-if grep -q " $SD_MOUNT .*\bro\b" /proc/mounts 2>/dev/null; then
+if [ "${SKIP_RO_REMOUNT:-0}" = "1" ]; then
+    # Caller (e.g. apk scriptlet) manages mount state; skip ro remount
+    :
+elif grep -q " $SD_MOUNT .*\bro\b" /proc/mounts 2>/dev/null; then
     SD_WAS_RO=true
 fi
 
@@ -123,7 +126,9 @@ umount "$TEMP_MOUNT"
 # Remount SD card read-only if it was read-only before
 if [ "$SD_WAS_RO" = "true" ]; then
     echo "Remounting $SD_MOUNT read-only..."
-    mount -o remount,ro "$SD_MOUNT"
+    if ! mount -o remount,ro "$SD_MOUNT" 2>/dev/null; then
+        echo "Warning: Could not remount $SD_MOUNT read-only (may be in use by another process)"
+    fi
 fi
 
 echo ""
