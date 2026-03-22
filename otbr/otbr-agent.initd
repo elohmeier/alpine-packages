@@ -11,7 +11,7 @@ command_background=true
 
 depend() {
 	need net avahi-daemon
-	after firewall
+	after firewall udev-settle
 }
 
 _detect_infra_if() {
@@ -69,11 +69,11 @@ start_pre() {
 	fi
 
 	# Wait for USB radio device to appear
-	local wait=${OTBR_DEVICE_WAIT:-30}
-	if [ -n "$OTBR_RADIO_DEVICE" ] && [ ! -c "$OTBR_RADIO_DEVICE" ] && [ "$wait" -gt 0 ]; then
+	local dev_wait=${OTBR_DEVICE_WAIT:-30}
+	if [ -n "$OTBR_RADIO_DEVICE" ] && [ ! -c "$OTBR_RADIO_DEVICE" ] && [ "$dev_wait" -gt 0 ]; then
 		local i=0
 		einfo "Waiting for radio device $OTBR_RADIO_DEVICE ..."
-		while [ ! -c "$OTBR_RADIO_DEVICE" ] && [ "$i" -lt "$wait" ]; do
+		while [ ! -c "$OTBR_RADIO_DEVICE" ] && [ "$i" -lt "$dev_wait" ]; do
 			sleep 1
 			i=$((i + 1))
 		done
