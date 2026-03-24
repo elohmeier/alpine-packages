@@ -32,10 +32,10 @@ pipeline:
       # Verify checksum
       case "${{build.arch}}" in
         x86_64)
-          EXPECTED_SHA256="0d6184f8d9f8da235217bedeb699d47ad914bcd8169ac0b701c248e2b14bbb3f"
+          EXPECTED_SHA256="afa089c032c31317921abc02fb881453aed4aa800358412171efcd069ecea1e3"
           ;;
         aarch64)
-          EXPECTED_SHA256="acfbd0b3bacd18558faba9c41f074038a70c680006098fc58c0326eace3f3cc8"
+          EXPECTED_SHA256="3445faf591f2e0a2d6aafa72608fcf3edef6733d3d8a6b0efd555948a58617ba"
           ;;
       esac
       echo "${EXPECTED_SHA256}  codex-${{build.arch}}-unknown-linux-musl.tar.gz" | sha256sum -c -
