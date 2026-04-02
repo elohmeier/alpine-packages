@@ -1,6 +1,6 @@
 package:
   name: ftp-paperless-bridge
-  version: "0.2.1"
+  version: "0.3.0"
   epoch: 0
   description: "FTP server bridge for network document scanners to paperless-ngx"
   copyright:
@@ -36,7 +36,6 @@ package:
       echo ""
       echo "Logs:"
       echo "  /var/log/ftp-paperless-bridge.log"
-      echo "  /var/log/ftp-paperless-bridge.err"
       echo ""
 
 environment:
@@ -61,7 +60,7 @@ pipeline:
     with:
       repository: https://github.com/elohmeier/ftp-paperless-bridge.git
       branch: main
-      expected-commit: 22592f2952a82220630401d037db9cd1ad59a797
+      expected-commit: c593b5e6f51b051ffe2ab857807e57b57e966a17
 
   - runs: |
       cargo fetch --locked

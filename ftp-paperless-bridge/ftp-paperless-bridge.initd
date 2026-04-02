@@ -7,7 +7,7 @@ command_user="paperless:paperless"
 command_background=true
 pidfile="/run/${RC_SVCNAME}.pid"
 output_log="/var/log/${RC_SVCNAME}.log"
-error_log="/var/log/${RC_SVCNAME}.err"
+error_log="/var/log/${RC_SVCNAME}.log"
 
 # Export all environment variables from conf.d file
 set -a
@@ -20,7 +20,7 @@ depend() {
 }
 
 start_pre() {
-	checkpath -f -o "$command_user" "$output_log" "$error_log"
+	checkpath -f -o "$command_user" "$output_log"
 
 	if [ -z "$FTP_PAPERLESS_BRIDGE_LISTEN" ]; then
 		eerror "FTP_PAPERLESS_BRIDGE_LISTEN not set in /etc/conf.d/$RC_SVCNAME"
