@@ -1,7 +1,7 @@
 package:
   name: ftp-paperless-bridge
   version: "0.3.0"
-  epoch: 0
+  epoch: 1
   description: "FTP server bridge for network document scanners to paperless-ngx"
   copyright:
     - license: Apache-2.0
@@ -37,6 +37,11 @@ package:
       echo "Logs:"
       echo "  /var/log/ftp-paperless-bridge.log"
       echo ""
+    post-upgrade: |
+      #!/bin/sh
+      if rc-service ftp-paperless-bridge status >/dev/null 2>&1; then
+        rc-service ftp-paperless-bridge restart
+      fi
 
 environment:
   contents:

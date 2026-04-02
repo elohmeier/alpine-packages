@@ -143,6 +143,16 @@ Required secret: `ABUILD_PRIVKEY` (RSA signing key)
 
 3. **Update `README.md`** - add package to the appropriate category table.
 
+4. **Add `post-upgrade` scriptlet** for packages with OpenRC services — ensures the service restarts automatically on `apk upgrade`:
+   ```yaml
+   scriptlets:
+     post-upgrade: |
+       #!/bin/sh
+       if rc-service <package> status >/dev/null 2>&1; then
+         rc-service <package> restart
+       fi
+   ```
+
 That's it. The workflow automatically:
 
 - Discovers new packages by scanning `*.yaml` files
