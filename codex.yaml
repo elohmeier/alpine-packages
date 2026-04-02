@@ -23,12 +23,10 @@ environment:
       - ca-certificates-bundle
 
 pipeline:
-  - uses: fetch
-    with:
-      uri: https://github.com/openai/codex/releases/download/rust-v${{package.version}}/codex-${{build.arch}}-unknown-linux-musl.tar.gz
-      extract: false
-
   - runs: |
+      # Download release binary
+      wget -q "https://github.com/openai/codex/releases/download/rust-v${{package.version}}/codex-${{build.arch}}-unknown-linux-musl.tar.gz"
+
       # Verify checksum
       case "${{build.arch}}" in
         x86_64)

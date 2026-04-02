@@ -134,7 +134,7 @@ pipeline:
 
       # Build PyTurboJPEG separately without its numpy dependency
       # (numpy is provided by system py3-numpy)
-      python3 -m pip wheel --no-deps --wheel-dir .dist "PyTurboJPEG~=1.7.0"
+      python3 -m pip wheel --no-deps --use-pep517 --wheel-dir .dist "PyTurboJPEG~=1.7.0"
 
   - runs: |
       pyver=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
