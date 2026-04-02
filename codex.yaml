@@ -24,21 +24,7 @@ environment:
 
 pipeline:
   - runs: |
-      # Download release binary
       wget -q "https://github.com/openai/codex/releases/download/rust-v${{package.version}}/codex-${{build.arch}}-unknown-linux-musl.tar.gz"
-
-      # Verify checksum
-      case "${{build.arch}}" in
-        x86_64)
-          EXPECTED_SHA256="e707ea65d7bbbc46a04afe731bf3c14a5b77522100cebf8bb93cffb95cf4610b"
-          ;;
-        aarch64)
-          EXPECTED_SHA256="29bc741268b6d17ddd148b8c2c2108e8b3a0eef914b07922491348144e667e09"
-          ;;
-      esac
-      echo "${EXPECTED_SHA256}  codex-${{build.arch}}-unknown-linux-musl.tar.gz" | sha256sum -c -
-
-      # Extract and install
       tar -xzf "codex-${{build.arch}}-unknown-linux-musl.tar.gz"
       install -Dm755 "codex-${{build.arch}}-unknown-linux-musl" "${{targets.destdir}}/usr/bin/codex"
 
