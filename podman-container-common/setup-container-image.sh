@@ -95,6 +95,8 @@ fi
 if [ -n "$OLD_SQUASHFS" ]; then
     echo "Upgrade mode: stopping service..."
     rc-service "${CONTAINER_NAME}-container" stop 2>/dev/null || true
+    cleanup_container "$CONTAINER_NAME"
+    cleanup_netavark_nftables
     echo "Removing old image: $OLD_SQUASHFS"
     rm -f "$OLD_SQUASHFS"
 fi

@@ -34,8 +34,8 @@ start_pre() {
         einfo "No rostore image found, will pull on first run"
     fi
 
-    # Remove any existing container
-    podman rm -f "$CONTAINER_NAME" 2>/dev/null || true
+    # Remove any existing container and clean up network state
+    cleanup_container "$CONTAINER_NAME"
 }
 
 start() {
@@ -59,8 +59,8 @@ start() {
 
 stop() {
     ebegin "Stopping ${name}"
-    podman stop -t 30 "$CONTAINER_NAME" 2>/dev/null
-    eend $?
+    cleanup_container "$CONTAINER_NAME"
+    eend 0
 }
 
 status() {

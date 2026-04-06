@@ -130,6 +130,67 @@ wait_for_podman() {
     return 0
 }
 
+# Fully clean up a container including network state
+# Use before (re)starting to avoid "Chain already exists" errors from netavark
+cleanup_container() {
+    local name="$1"
+    podman stop -t 30 "$name" 2>/dev/null || true
+    podman rm -f "$name" 2>/dev/null || true
+}
+
+# Remove orphaned netavark nftables chains (nat table)
+# On iptables-nft systems, podman cleanup may leave stale nftables chains
+# that cause "Chain already exists" on next container start.
+# Safe to call when no bridge-networked containers are running.
+cleanup_netavark_nftables() {
+    command -v nft >/dev/null 2>&1 || return 0
+
+    # Only clean up if no bridge-networked containers are running
+    if podman ps --format '{{.Networks}}' 2>/dev/null | grep -q 'podman'; then
+        return 0
+    fi
+
+    local chain
+    # Flush and delete netavark chains from nat table
+    nft list chains ip nat 2>/dev/null | grep -o 'chain NETAVARK[^ ]*' | \
+        awk '{print $2}' | while read -r chain; do
+        nft flush chain ip nat "$chain" 2>/dev/null || true
+    done
+
+    # Remove jump rules referencing netavark chains from base chains
+    local base_chain handle
+    for base_chain in PREROUTING POSTROUTING OUTPUT; do
+        nft -a list chain ip nat "$base_chain" 2>/dev/null | \
+            grep NETAVARK | grep -o 'handle [0-9]*' | awk '{print $2}' | \
+            while read -r handle; do
+            nft delete rule ip nat "$base_chain" handle "$handle" 2>/dev/null || true
+        done
+    done
+
+    # Now delete the empty chains
+    nft list chains ip nat 2>/dev/null | grep -o 'chain NETAVARK[^ ]*' | \
+        awk '{print $2}' | while read -r chain; do
+        nft delete chain ip nat "$chain" 2>/dev/null || true
+    done
+
+    # Same for filter table
+    nft list chains ip filter 2>/dev/null | grep -o 'chain NETAVARK[^ ]*' | \
+        awk '{print $2}' | while read -r chain; do
+        nft flush chain ip filter "$chain" 2>/dev/null || true
+    done
+    for base_chain in INPUT FORWARD; do
+        nft -a list chain ip filter "$base_chain" 2>/dev/null | \
+            grep NETAVARK | grep -o 'handle [0-9]*' | awk '{print $2}' | \
+            while read -r handle; do
+            nft delete rule ip filter "$base_chain" handle "$handle" 2>/dev/null || true
+        done
+    done
+    nft list chains ip filter 2>/dev/null | grep -o 'chain NETAVARK[^ ]*' | \
+        awk '{print $2}' | while read -r chain; do
+        nft delete chain ip filter "$chain" 2>/dev/null || true
+    done
+}
+
 # Check container status (for OpenRC status command)
 container_status() {
     local name="$1"
