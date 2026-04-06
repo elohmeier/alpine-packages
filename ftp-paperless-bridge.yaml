@@ -65,7 +65,7 @@ pipeline:
     with:
       repository: https://github.com/elohmeier/ftp-paperless-bridge.git
       branch: main
-      expected-commit: 4f2db32b7be82e19a48c6daadb220ca78561a30d
+      expected-commit: ac3dbd3f05e5e8a68fc8b6e9e21b59a51e6300f0
 
   - runs: |
       cargo fetch --locked
