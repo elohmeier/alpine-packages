@@ -1,6 +1,6 @@
 package:
   name: home-assistant-container
-  version: 2026.4.1
+  version: 2026.4.2
   epoch: 12
   description: "Home Assistant Core running in Podman container"
   copyright:
