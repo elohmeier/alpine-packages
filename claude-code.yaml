@@ -1,6 +1,6 @@
 package:
   name: claude-code
-  version: 2.1.117
+  version: 2.1.118
   epoch: 0
   description: "Claude Code - Anthropic's agentic coding tool for the terminal"
   copyright:
