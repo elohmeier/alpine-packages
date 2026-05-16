@@ -52,6 +52,9 @@ start() {
         -e "TZ=${HASS_TIMEZONE}" \
         --network=host \
         --privileged \
+        --log-driver k8s-file \
+        --log-opt max-size=20m \
+        --log-opt max-file=3 \
         ${CONTAINER_EXTRA_OPTS} \
         "$CONTAINER_IMAGE" >/dev/null 2>&1
     eend $?

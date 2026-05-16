@@ -1,7 +1,7 @@
 package:
   name: home-assistant-container
   version: 2026.5.1
-  epoch: 12
+  epoch: 13
   description: "Home Assistant Core running in Podman container"
   copyright:
     - license: Apache-2.0
@@ -14,6 +14,7 @@ package:
       - dbus-openrc
       - bluez
       - bluez-openrc
+      - logrotate
   target-architecture:
     - x86_64
     - aarch64
@@ -90,6 +91,14 @@ pipeline:
       # Install udev rules for USB device access
       install -Dm644 home-assistant-container/99-home-assistant.rules \
         "${{targets.destdir}}"/etc/udev/rules.d/99-home-assistant.rules
+
+      # Install logrotate config for home-assistant.log
+      install -Dm644 home-assistant-container/home-assistant.logrotate \
+        "${{targets.destdir}}"/etc/logrotate.d/home-assistant
+
+      # Install hourly periodic runner so size-based rotation can fire promptly
+      install -Dm755 home-assistant-container/home-assistant-logrotate.hourly \
+        "${{targets.destdir}}"/etc/periodic/hourly/logrotate-home-assistant
 
       # Create data directory
       install -dm755 "${{targets.destdir}}"/var/lib/homeassistant

@@ -1,0 +1,9 @@
+/var/lib/homeassistant/home-assistant.log {
+	size 100M
+	rotate 3
+	missingok
+	notifempty
+	copytruncate
+	compress
+	delaycompress
+}
