@@ -1,6 +1,6 @@
 package:
   name: presence-simulation
-  version: "5.1"
+  version: "5.3"
   epoch: 0
   description: "Home Assistant custom integration for presence simulation"
   copyright:
