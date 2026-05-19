@@ -28,7 +28,7 @@ pipeline:
     with:
       repository: https://github.com/slashback100/presence_simulation.git
       tag: v${{package.version}}
-      expected-commit: 764da6e3484bdcbb776e5aa1b5e2e80c556fc7cd
+      expected-commit: f25cd4b79858c96d1ac0d7ef850754a27f13997e
 
   - runs: |
       install -dm755 "${{targets.destdir}}/var/lib/homeassistant/custom_components"
