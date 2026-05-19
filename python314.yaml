@@ -62,7 +62,7 @@ pipeline:
   - uses: fetch
     with:
       uri: https://www.python.org/ftp/python/${{package.version}}/Python-${{package.version}}.tar.xz
-      expected-sha256: a97d5549e9ad81fe17159ed02c68774ad5d266c72f8d9a0b5a9c371fe85d902b
+      expected-sha256: 7e32597b99e5d9a39abed35de4693fa169df3e5850d4c334337ffd6a19a36db6
 
   # Apply musl compatibility patch
   - runs: |
