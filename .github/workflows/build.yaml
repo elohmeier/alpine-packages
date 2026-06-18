@@ -334,6 +334,6 @@ jobs:
           # Replace placeholder in index.html
           sed -i 's|<!-- PACKAGES_TABLE -->|'"$(cat /tmp/packages_table.html | tr '\n' ' ')"'|' _site/index.html
 
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
 
       - uses: actions/deploy-pages@v5
