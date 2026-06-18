@@ -1,6 +1,6 @@
 package:
   name: ha-pysmaplus
-  version: "0.5.5"
+  version: "0.5.6"
   epoch: 0
   description: "Home Assistant custom integration for SMA devices (Speedwire + WebConnect)"
   copyright:
