@@ -28,7 +28,7 @@ pipeline:
     with:
       repository: https://github.com/littleyoda/ha-pysmaplus.git
       tag: v${{package.version}}
-      expected-commit: 191d1817c64f283fd1aafd9283329ae8867676f7
+      expected-commit: 93e4ce9c976c4910ebbf1b3c196b266b7a4621ac
 
   - runs: |
       install -dm755 "${{targets.destdir}}/var/lib/homeassistant/custom_components"
