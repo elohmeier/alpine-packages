@@ -1,0 +1,77 @@
+package:
+  name: home-assistant-watch
+  version: 0.1.0
+  epoch: 0
+  description: "Watchdog: restart Home Assistant if its recorder stops writing"
+  copyright:
+    - license: Apache-2.0
+  dependencies:
+    runtime:
+      - busybox
+      - curl
+      - openrc
+  target-architecture:
+    - x86_64
+    - aarch64
+  scriptlets:
+    post-install: |
+      #!/bin/sh
+      echo ""
+      echo "=== home-assistant-watch installed ==="
+      echo ""
+      echo "Edit /etc/conf.d/home-assistant-watch to set HASS_WATCH_TOKEN"
+      echo "and HASS_WATCH_ENTITY, then start the service:"
+      echo ""
+      echo "  rc-service home-assistant-watch start"
+      echo "  rc-update add home-assistant-watch default"
+      echo ""
+    post-upgrade: |
+      #!/bin/sh
+      if rc-service home-assistant-watch status >/dev/null 2>&1; then
+        rc-service home-assistant-watch restart
+      fi
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/edge/main
+      - https://dl-cdn.alpinelinux.org/alpine/edge/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+
+pipeline:
+  - runs: |
+      install -Dm755 home-assistant-watch/home-assistant-watch.initd \
+        "${{targets.destdir}}"/etc/init.d/home-assistant-watch
+      install -Dm644 home-assistant-watch/home-assistant-watch.confd \
+        "${{targets.destdir}}"/etc/conf.d/home-assistant-watch
+      install -Dm755 home-assistant-watch/home-assistant-watch \
+        "${{targets.destdir}}"/usr/bin/home-assistant-watch
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/edge/main
+        - https://dl-cdn.alpinelinux.org/alpine/edge/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+        - curl
+        - openrc
+  pipeline:
+    - name: "Verify files installed"
+      runs: |
+        test -x /usr/bin/home-assistant-watch
+        test -x /etc/init.d/home-assistant-watch
+        test -f /etc/conf.d/home-assistant-watch
+    - name: "Script passes syntax check"
+      runs: |
+        sh -n /usr/bin/home-assistant-watch
+        sh -n /etc/init.d/home-assistant-watch
+    - name: "Script prints usage with --help"
+      runs: |
+        /usr/bin/home-assistant-watch --help | grep -q "Usage"

@@ -1,0 +1,150 @@
+#!/bin/sh
+# Watchdog: restart Home Assistant if its recorder stops writing to the DB.
+# See /etc/conf.d/home-assistant-watch for configuration.
+
+set -u
+
+case "${1:-}" in
+    -h|--help)
+        cat <<'EOF'
+Usage: home-assistant-watch
+
+Polls the Home Assistant REST API for a recently-updating entity. If the
+entity is updating in /api/states but its /api/history/period response is
+empty, the recorder integration is dead and HA is restarted via
+rc-service.
+
+Configuration is read from /etc/conf.d/home-assistant-watch (sourced on
+startup). At minimum HASS_WATCH_TOKEN and HASS_WATCH_ENTITY must be set.
+EOF
+        exit 0
+        ;;
+esac
+
+# Source confd directly — supervise-daemon does not always propagate env.
+[ -f /etc/conf.d/home-assistant-watch ] && . /etc/conf.d/home-assistant-watch
+
+: "${HASS_WATCH_TOKEN:?HASS_WATCH_TOKEN must be set in /etc/conf.d/home-assistant-watch}"
+: "${HASS_WATCH_ENTITY:?HASS_WATCH_ENTITY must be set in /etc/conf.d/home-assistant-watch}"
+: "${HASS_WATCH_URL:=http://localhost:8123}"
+: "${HASS_WATCH_INTERVAL:=60}"
+: "${HASS_WATCH_THRESHOLD:=5}"
+: "${HASS_WATCH_GRACE:=300}"
+: "${HASS_WATCH_HISTORY_WINDOW:=600}"
+: "${HASS_WATCH_RESTART_BACKOFF:=1800}"
+: "${HASS_WATCH_SERVICE:=home-assistant-container}"
+
+log() {
+    printf '%s %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*"
+}
+
+api() {
+    curl -sS --max-time 10 \
+        -H "Authorization: Bearer $HASS_WATCH_TOKEN" \
+        "$@"
+}
+
+# Parse an ISO 8601 timestamp into epoch seconds via busybox date.
+# Input  : 2026-06-24T16:11:06.892328+00:00
+# Output : 1750786266 (or empty on failure)
+iso_to_epoch() {
+    local ts=$1
+    # Strip fractional seconds and timezone; treat as UTC.
+    ts=$(printf '%s' "$ts" | sed 's/T/ /; s/[.+].*//')
+    date -u -d "$ts" '+%s' 2>/dev/null
+}
+
+# probe() returns:
+#   0 — recorder healthy, or probe entity is stale (skip without counting)
+#   1 — recorder confirmed unhealthy
+#   2 — HA API unreachable / probe inconclusive (do not count as failure)
+probe() {
+    local state_json last_updated state_epoch now history from_epoch from_ts
+
+    state_json=$(api -f "$HASS_WATCH_URL/api/states/$HASS_WATCH_ENTITY" 2>/dev/null) || return 2
+
+    last_updated=$(printf '%s' "$state_json" \
+        | sed -n 's/.*"last_updated":"\([^"]*\)".*/\1/p' | head -n1)
+    if [ -z "$last_updated" ]; then
+        log "probe: entity $HASS_WATCH_ENTITY missing or has no last_updated"
+        return 2
+    fi
+
+    state_epoch=$(iso_to_epoch "$last_updated")
+    if [ -z "$state_epoch" ]; then
+        log "probe: cannot parse last_updated=$last_updated"
+        return 2
+    fi
+
+    now=$(date -u '+%s')
+    if [ $((now - state_epoch)) -gt "$HASS_WATCH_HISTORY_WINDOW" ]; then
+        log "probe: entity stale ($((now - state_epoch))s old), skipping"
+        return 0
+    fi
+
+    from_epoch=$((now - HASS_WATCH_HISTORY_WINDOW))
+    from_ts=$(date -u -d "@$from_epoch" '+%Y-%m-%dT%H:%M:%S')
+
+    history=$(api -f -G \
+        --data-urlencode "filter_entity_id=$HASS_WATCH_ENTITY" \
+        --data-urlencode "minimal_response" \
+        "$HASS_WATCH_URL/api/history/period/$from_ts" 2>/dev/null) || return 2
+
+    case "$history" in
+        *'"state"'*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+restart_ha() {
+    local last_restart=$1 now
+    now=$(date -u '+%s')
+    if [ "$last_restart" -gt 0 ] \
+        && [ $((now - last_restart)) -lt "$HASS_WATCH_RESTART_BACKOFF" ]; then
+        log "skipping restart: only $((now - last_restart))s since last restart" \
+            "(backoff $HASS_WATCH_RESTART_BACKOFF)"
+        return 1
+    fi
+    log "restarting $HASS_WATCH_SERVICE"
+    if rc-service "$HASS_WATCH_SERVICE" restart; then
+        log "restart issued; sleeping ${HASS_WATCH_GRACE}s grace period"
+        sleep "$HASS_WATCH_GRACE"
+        return 0
+    fi
+    log "rc-service restart failed (rc=$?)"
+    return 1
+}
+
+log "starting: entity=$HASS_WATCH_ENTITY interval=${HASS_WATCH_INTERVAL}s threshold=$HASS_WATCH_THRESHOLD"
+log "initial grace period: ${HASS_WATCH_GRACE}s"
+sleep "$HASS_WATCH_GRACE"
+
+fail_count=0
+last_restart=0
+
+while :; do
+    probe
+    rc=$?
+    case $rc in
+        0)
+            if [ "$fail_count" -gt 0 ]; then
+                log "recorder healthy again after $fail_count consecutive failures"
+                fail_count=0
+            fi
+            ;;
+        1)
+            fail_count=$((fail_count + 1))
+            log "recorder unhealthy ($fail_count/$HASS_WATCH_THRESHOLD)"
+            if [ "$fail_count" -ge "$HASS_WATCH_THRESHOLD" ]; then
+                if restart_ha "$last_restart"; then
+                    last_restart=$(date -u '+%s')
+                fi
+                fail_count=0
+            fi
+            ;;
+        2)
+            log "HA API unreachable, deferring"
+            ;;
+    esac
+    sleep "$HASS_WATCH_INTERVAL"
+done

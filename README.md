@@ -25,6 +25,7 @@ apk update
 | ---------------------------- | ----------------------------------------------------------------------------------------- | --------------- |
 | **adaptive-lighting**        | Home Assistant custom integration for adaptive lighting                                   | x86_64, aarch64 |
 | **home-assistant-container** | Home Assistant Core - Podman container                                                    | x86_64, aarch64 |
+| **home-assistant-watch**     | Watchdog: restart Home Assistant if its recorder stops writing                            | x86_64, aarch64 |
 | **matter-server**            | Open Home Foundation Matter Server - WebSocket-based Matter controller for Home Assistant | x86_64, aarch64 |
 | **chip-sdk**                 | Matter/CHIP SDK Python bindings                                                           | x86_64, aarch64 |
 | **otbr**                     | OpenThread Border Router for Thread/Matter networks                                       | x86_64, aarch64 |
@@ -145,6 +146,27 @@ rc-update add home-assistant-container default
 ```
 
 Package upgrades on diskless systems automatically rebuild the squashfs image.
+
+### home-assistant-watch
+
+Watchdog that polls Home Assistant's REST API for a recently-updating entity. If the entity is updating in `/api/states` (HA is alive in-memory) but its `/api/history/period` response is empty (recorder DB is silent), the recorder integration is dead and the watchdog calls `rc-service home-assistant-container restart`.
+
+This guards against a specific HA failure mode: when the recorder integration fails its one-shot setup at boot (e.g., the Postgres backend was briefly unreachable), HA keeps running but never retries, silently dropping history forever until the next manual restart.
+
+```sh
+apk add home-assistant-watch
+$EDITOR /etc/conf.d/home-assistant-watch  # set HASS_WATCH_TOKEN, HASS_WATCH_ENTITY
+rc-service home-assistant-watch start
+rc-update add home-assistant-watch default
+```
+
+- **Service:** `home-assistant-watch`
+- **Config:** `/etc/conf.d/home-assistant-watch`
+- **Log:** `/var/log/home-assistant-watch.log`
+- **Required vars:** `HASS_WATCH_TOKEN` (LLA token), `HASS_WATCH_ENTITY` (frequently-updating sensor)
+- **Defaults:** probe every 60s, restart after 5 consecutive failures, 5-min grace period, 30-min minimum between restarts
+
+Generate `HASS_WATCH_TOKEN` via HA UI → Profile → Security → Long-lived Access Tokens. Pick `HASS_WATCH_ENTITY` carefully — it must update at least every couple of minutes, otherwise the probe falsely concludes the recorder is dead. Power meters, ESPHome BME280s, and similar high-rate sensors work well.
 
 ### matter-server
 

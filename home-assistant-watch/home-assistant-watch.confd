@@ -1,0 +1,40 @@
+# Home Assistant watchdog configuration
+#
+# Polls HA's history API for a recently-updating entity. If the entity is
+# updating in /api/states (HA in-memory) but /api/history/period returns
+# empty for it (recorder DB), the recorder is broken; the watchdog restarts
+# the home-assistant-container service.
+
+# Long-lived access token for the HA REST API. REQUIRED.
+# Generate via: HA UI → Profile → Security → Long-lived Access Tokens
+HASS_WATCH_TOKEN=""
+
+# Entity to probe. REQUIRED. Pick a sensor that updates at least every couple
+# of minutes (e.g., a power meter, an indoor sensor, an ESPHome device).
+# A sun.sun-style entity that updates twice a day is a bad choice.
+HASS_WATCH_ENTITY=""
+
+# HA endpoint (default: localhost since this runs on the same host).
+#HASS_WATCH_URL="http://localhost:8123"
+
+# How often to probe, in seconds (default: 60).
+#HASS_WATCH_INTERVAL="60"
+
+# Number of consecutive probe failures before restarting HA (default: 5).
+# With the default interval, this is 5 minutes of confirmed badness.
+#HASS_WATCH_THRESHOLD="5"
+
+# After a restart, ignore probes for this many seconds (default: 300).
+#HASS_WATCH_GRACE="300"
+
+# Look-back window for the history probe, in seconds (default: 600).
+# Should be > 2× the longest expected gap between probe-entity updates.
+#HASS_WATCH_HISTORY_WINDOW="600"
+
+# Minimum seconds between restart attempts (default: 1800 = 30 minutes).
+# Prevents restart storms when the underlying problem isn't HA itself.
+#HASS_WATCH_RESTART_BACKOFF="1800"
+
+# OpenRC service to restart on recorder failure
+# (default: home-assistant-container).
+#HASS_WATCH_SERVICE="home-assistant-container"

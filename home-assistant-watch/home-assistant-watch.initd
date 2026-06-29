@@ -1,0 +1,28 @@
+#!/sbin/openrc-run
+
+name="home-assistant-watch"
+description="Restart Home Assistant if its recorder stops writing"
+
+command="/usr/bin/home-assistant-watch"
+pidfile="/run/${RC_SVCNAME}.pid"
+
+supervisor=supervise-daemon
+supervise_daemon_args="--respawn-delay 5 --respawn-max 0"
+output_log="/var/log/${RC_SVCNAME}.log"
+error_log="/var/log/${RC_SVCNAME}.log"
+
+depend() {
+    after home-assistant-container
+}
+
+start_pre() {
+    checkpath --file --mode 0644 "/var/log/${RC_SVCNAME}.log"
+    if [ -z "${HASS_WATCH_TOKEN:-}" ]; then
+        eerror "HASS_WATCH_TOKEN not set in /etc/conf.d/${RC_SVCNAME}"
+        return 1
+    fi
+    if [ -z "${HASS_WATCH_ENTITY:-}" ]; then
+        eerror "HASS_WATCH_ENTITY not set in /etc/conf.d/${RC_SVCNAME}"
+        return 1
+    fi
+}
