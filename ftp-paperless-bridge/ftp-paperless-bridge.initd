@@ -4,8 +4,8 @@ name="ftp-paperless-bridge"
 description="FTP to Paperless-ngx bridge service"
 command="/usr/bin/ftp-paperless-bridge"
 command_user="paperless:paperless"
-command_background=true
-pidfile="/run/${RC_SVCNAME}.pid"
+supervisor=supervise-daemon
+supervise_daemon_args="--respawn-delay 10 --respawn-max 0"
 output_log="/var/log/${RC_SVCNAME}.log"
 error_log="/var/log/${RC_SVCNAME}.log"
 
@@ -16,7 +16,8 @@ set +a
 
 depend() {
 	need net
-	after firewall
+	use tailscale
+	after firewall tailscale
 }
 
 start_pre() {

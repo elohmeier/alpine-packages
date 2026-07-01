@@ -1,10 +1,13 @@
 package:
   name: ftp-paperless-bridge
   version: "0.3.1"
-  epoch: 1
+  epoch: 2
   description: "FTP server bridge for network document scanners to paperless-ngx"
   copyright:
     - license: Apache-2.0
+  dependencies:
+    runtime:
+      - openrc
   target-architecture:
     - x86_64
     - aarch64
@@ -94,7 +97,20 @@ test:
         - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
       packages:
         - busybox
+        - openrc
   pipeline:
     - runs: |
         ftp-paperless-bridge --version
         ftp-paperless-bridge --help
+    - runs: |
+        test -x /etc/init.d/ftp-paperless-bridge
+        test -x /sbin/openrc-run
+        grep -q '^supervisor=supervise-daemon$' /etc/init.d/ftp-paperless-bridge
+        grep -q -- '--respawn-delay 10 --respawn-max 0' /etc/init.d/ftp-paperless-bridge
+        if grep -q '^command_background=' /etc/init.d/ftp-paperless-bridge; then
+          exit 1
+        fi
+        if grep -q '^pidfile=' /etc/init.d/ftp-paperless-bridge; then
+          exit 1
+        fi
+        sh -n /etc/init.d/ftp-paperless-bridge
