@@ -1,13 +1,14 @@
 package:
   name: prusalink
   version: 0.8.1
-  epoch: 11
+  epoch: 12
   description: "Web interface and REST API for Prusa 3D printers with PrusaConnect integration"
   copyright:
     - license: Freeware
   dependencies:
     runtime:
       - python3
+      - py3-setuptools
       - py3-numpy
       - libjpeg-turbo
       - libturbojpeg
