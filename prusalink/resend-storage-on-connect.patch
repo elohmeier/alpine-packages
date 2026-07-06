@@ -1,0 +1,30 @@
+--- prusa/link/printer_adapter/prusa_link.py
++++ prusa/link/printer_adapter/prusa_link.py
+@@ -1087,9 +1087,27 @@ class PrusaLink:
+ 
+     def connection_renewed(self, *_) -> None:
+         """Reacts to the connection with connect being ok again"""
++        self.resend_storage()
+         self.telemetry_passer.resend_latest_telemetry()
+ 
++    def resend_storage(self) -> None:
++        """Re-send attached storage trees after Connect recovers.
++
++        Storage attach events can happen while Connect rejects the token or
++        before the printer SN/fingerprint is available. Without replaying
++        them, Connect may keep thinking there is no writable printer storage.
++        """
++        if not self.printer.is_initialised():
++            return
++
++        for storage in self.printer.fs.storage_dict.values():
++            payload = {
++                "root": f"{self.printer.fs.sep}{storage.storage}",
++                "files": storage.to_dict_legacy(),
++            }
++            self.printer.fs.connect_event(EventType.MEDIUM_INSERTED, payload)
++
+     def transfer_activity_observed(self, *_) -> None:
+         """Notifies PrusaLink components about a transfer happening"""
+         self.telemetry_passer.activity_observed()
+         self.lcd_printer.notify()

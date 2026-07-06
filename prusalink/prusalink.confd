@@ -9,4 +9,5 @@
 
 # Additional options to pass to prusalink
 # See 'prusalink --help' for available options
-#PRUSALINK_OPTS="-c /etc/prusalink/prusalink.ini"
+# Example: PRUSALINK_OPTS="-i -l prusa.link.serial.serial_queue=DEBUG"
+#PRUSALINK_OPTS=""

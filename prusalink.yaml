@@ -1,7 +1,7 @@
 package:
   name: prusalink
   version: 0.8.1
-  epoch: 10
+  epoch: 11
   description: "Web interface and REST API for Prusa 3D printers with PrusaConnect integration"
   copyright:
     - license: Freeware
@@ -44,8 +44,7 @@ package:
           echo ""
           echo "Configuration: /etc/prusalink/prusalink.ini"
           echo "Data directory: /var/lib/prusalink"
-          echo "Logs: /var/log/prusalink.log"
-          echo "Errors: /var/log/prusalink.err"
+          echo "Logs: logread | grep prusalink"
           echo ""
           echo "To start the service:"
           echo "  /etc/init.d/prusalink start"
@@ -153,6 +152,8 @@ pipeline:
         --no-compile \
         --target "$sitepkgs" \
         .dist/*.whl
+
+      patch -p0 -d "$sitepkgs" < prusalink/resend-storage-on-connect.patch
 
       # Byte-compile Python files
       python3 -m compileall -q "$sitepkgs" || true
