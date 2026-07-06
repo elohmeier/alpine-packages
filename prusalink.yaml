@@ -1,7 +1,7 @@
 package:
   name: prusalink
   version: 0.8.1
-  epoch: 12
+  epoch: 13
   description: "Web interface and REST API for Prusa 3D printers with PrusaConnect integration"
   copyright:
     - license: Freeware
@@ -9,6 +9,7 @@ package:
     runtime:
       - python3
       - py3-setuptools
+      - py3-packaging
       - py3-numpy
       - libjpeg-turbo
       - libturbojpeg
@@ -147,6 +148,9 @@ pipeline:
       if [ -n "$muslwhl" ]; then
         rm -f .dist/charset_normalizer*-py3-none-any.whl 2>/dev/null || true
       fi
+
+      # Use Alpine packages for these so ownership does not conflict with py3-setuptools.
+      rm -f .dist/setuptools-*.whl .dist/packaging-*.whl
 
       # Install all wheels (dependencies + prusalink)
       python3 -m pip install \
