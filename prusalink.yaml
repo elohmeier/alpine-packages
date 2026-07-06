@@ -133,7 +133,8 @@ pipeline:
 
       # Build PyTurboJPEG separately without its numpy dependency
       # (numpy is provided by system py3-numpy)
-      python3 -m pip wheel --no-deps --use-pep517 --wheel-dir .dist "PyTurboJPEG~=1.7.0"
+      python3 -m pip wheel --no-deps --use-pep517 --wheel-dir .dist "PyTurboJPEG~=1.7.0" || true
+      ls .dist/pyturbojpeg-*.whl >/dev/null
 
   - runs: |
       pyver=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
@@ -141,7 +142,7 @@ pipeline:
 
       # Remove duplicate wheels (keep platform-specific over pure-python)
       # charset_normalizer has both musllinux and py3-none-any versions
-      muslwhl=$(ls .dist/charset_normalizer*musllinux*.whl 2>/dev/null | head -1)
+      muslwhl=$(find .dist -name 'charset_normalizer*musllinux*.whl' -print -quit)
       if [ -n "$muslwhl" ]; then
         rm -f .dist/charset_normalizer*-py3-none-any.whl 2>/dev/null || true
       fi
