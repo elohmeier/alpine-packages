@@ -1,7 +1,7 @@
 package:
   name: prusalink
   version: 0.8.1
-  epoch: 17
+  epoch: 18
   description: "Web interface and REST API for Prusa 3D printers with PrusaConnect integration"
   copyright:
     - license: Freeware
@@ -71,6 +71,10 @@ package:
       old_dir="/var/lib/prusalink/gcodes"
       new_dir="/var/lib/prusalink/PrusaLink gcodes"
 
+      # Prusa Connect/Slicer key off the upstream default storage name.
+      # A custom basename such as "gcodes" can make Connect report:
+      # "There is no storage device available on the printer".
+      # See https://github.com/prusa3d/Prusa-Link/issues/1012.
       if [ -f "$config" ] && grep -q '^directory = /var/lib/prusalink/gcodes$' "$config"; then
           mkdir -p "$new_dir"
           if [ -d "$old_dir" ] && [ -z "$(find "$new_dir" -mindepth 1 -print -quit 2>/dev/null)" ]; then
