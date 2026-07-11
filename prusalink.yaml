@@ -1,7 +1,7 @@
 package:
   name: prusalink
   version: 0.8.1
-  epoch: 13
+  epoch: 16
   description: "Web interface and REST API for Prusa 3D printers with PrusaConnect integration"
   copyright:
     - license: Freeware

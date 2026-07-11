@@ -1,13 +1,22 @@
 --- prusa/link/printer_adapter/prusa_link.py
 +++ prusa/link/printer_adapter/prusa_link.py
-@@ -1087,9 +1087,27 @@ class PrusaLink:
+@@ -331,6 +331,8 @@ class PrusaLink:
+         self.storage_controller.sd_detached_signal.connect(self.sd_detach)
+         self.printer_polling.printer_type.became_valid_signal.connect(
+             self.printer_type_changed)
++        self.printer_polling.serial_number.became_valid_signal.connect(
++            self.resend_storage)
+         self.printer_polling.print_state.became_valid_signal.connect(
+             self.print_state_changed)
+         self.printer_polling.byte_position.value_changed_signal.connect(
+@@ -1087,9 +1087,30 @@ class PrusaLink:
  
      def connection_renewed(self, *_) -> None:
          """Reacts to the connection with connect being ok again"""
 +        self.resend_storage()
          self.telemetry_passer.resend_latest_telemetry()
  
-+    def resend_storage(self) -> None:
++    def resend_storage(self, *_) -> None:
 +        """Re-send attached storage trees after Connect recovers.
 +
 +        Storage attach events can happen while Connect rejects the token or
@@ -15,8 +24,11 @@
 +        them, Connect may keep thinking there is no writable printer storage.
 +        """
 +        if not self.printer.is_initialised():
++            log.debug("Skipping storage resend; printer is not initialised")
 +            return
 +
++        log.info("Re-sending %d attached storage(s) to Prusa Connect",
++                 len(self.printer.fs.storage_dict))
 +        for storage in self.printer.fs.storage_dict.values():
 +            payload = {
 +                "root": f"{self.printer.fs.sep}{storage.storage}",
