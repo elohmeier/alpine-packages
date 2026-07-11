@@ -1,7 +1,7 @@
 package:
   name: prusalink
   version: 0.8.1
-  epoch: 16
+  epoch: 17
   description: "Web interface and REST API for Prusa 3D printers with PrusaConnect integration"
   copyright:
     - license: Freeware
@@ -64,6 +64,24 @@ package:
           echo "This enables the full UART and disables Bluetooth to free it."
           echo "Reboot after making these changes."
           echo ""
+      fi
+    post-upgrade: |
+      #!/bin/sh
+      config="/etc/prusalink/prusalink.ini"
+      old_dir="/var/lib/prusalink/gcodes"
+      new_dir="/var/lib/prusalink/PrusaLink gcodes"
+
+      if [ -f "$config" ] && grep -q '^directory = /var/lib/prusalink/gcodes$' "$config"; then
+          mkdir -p "$new_dir"
+          if [ -d "$old_dir" ] && [ -z "$(find "$new_dir" -mindepth 1 -print -quit 2>/dev/null)" ]; then
+              cp -a "$old_dir"/. "$new_dir"/ 2>/dev/null || true
+          fi
+          chown -R prusalink:prusalink "$new_dir" 2>/dev/null || true
+          sed -i 's|^directory = /var/lib/prusalink/gcodes$|directory = ./PrusaLink gcodes|' "$config"
+      fi
+
+      if rc-service prusalink status >/dev/null 2>&1; then
+          rc-service prusalink restart
       fi
 
 environment:
@@ -191,7 +209,7 @@ pipeline:
 
       # Create data directories
       install -dm755 "${{targets.destdir}}"/var/lib/prusalink
-      install -dm755 "${{targets.destdir}}"/var/lib/prusalink/gcodes
+      install -dm755 "${{targets.destdir}}"/var/lib/prusalink/"PrusaLink gcodes"
 
       # Install udev rules for serial port access
       install -Dm644 prusalink/99-prusalink.rules "${{targets.destdir}}"/etc/udev/rules.d/99-prusalink.rules

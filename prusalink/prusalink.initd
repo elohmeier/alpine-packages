@@ -35,9 +35,9 @@ start_pre() {
 	checkpath --directory --owner "${PRUSALINK_USER:-prusalink}:${PRUSALINK_GROUP:-prusalink}" \
 		--mode 0755 /var/lib/prusalink
 
-	# Ensure gcodes directory exists
+	# Ensure default G-code directory exists
 	checkpath --directory --owner "${PRUSALINK_USER:-prusalink}:${PRUSALINK_GROUP:-prusalink}" \
-		--mode 0755 /var/lib/prusalink/gcodes
+		--mode 0755 "/var/lib/prusalink/PrusaLink gcodes"
 
 	# Check for configuration file
 	local config_file="${PRUSALINK_CONFIG:-/etc/prusalink/prusalink.ini}"
