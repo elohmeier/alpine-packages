@@ -1,6 +1,6 @@
 package:
   name: openccu-container
-  version: 3.87.6.20260614
+  version: 3.89.8.20260719
   epoch: 3
   description: "OpenCCU (Podman container) - Homematic CCU"
   copyright:
