@@ -1,6 +1,6 @@
 package:
   name: adaptive-lighting
-  version: "1.30.1"
+  version: "1.31.0"
   epoch: 1
   description: "Home Assistant custom integration for adaptive lighting"
   copyright:
@@ -28,7 +28,7 @@ pipeline:
     with:
       repository: https://github.com/basnijholt/adaptive-lighting.git
       tag: v${{package.version}}
-      expected-commit: e0f812d406ffa8ec9309ef2d1bfd27529c67c4ec
+      expected-commit: 7afdf5bc5ca36bb17a999dba53ef84fc49c9b13e
 
   - runs: |
       install -dm755 "${{targets.destdir}}/var/lib/homeassistant/custom_components"
