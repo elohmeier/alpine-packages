@@ -1,6 +1,6 @@
 package:
   name: podinfo-container
-  version: 6.14.0
+  version: 6.14.1
   epoch: 1
   description: "Podinfo (Podman container) - Go microservice template"
   copyright:
