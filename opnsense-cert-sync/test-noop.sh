@@ -14,7 +14,9 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 mkdir -p "$test_dir/bin" "$test_dir/state"
-openssl req -x509 -newkey rsa:2048 -nodes -days 90 \
+# Intentionally shorter than MINIMUM_VALID_DAYS: an already-live certificate
+# remains healthy while cert-manager prepares its replacement.
+openssl req -x509 -newkey rsa:2048 -nodes -days 14 \
     -subj '/CN=opnsense.example.com' \
     -addext 'subjectAltName=DNS:opnsense.example.com' \
     -keyout "$test_dir/tls.key" -out "$test_dir/tls.crt" >/dev/null 2>&1

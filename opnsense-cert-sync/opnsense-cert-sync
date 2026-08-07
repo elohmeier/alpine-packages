@@ -248,8 +248,6 @@ resource_version=$(jq -r '.metadata.resourceVersion // empty' "$kube_json")
 minimum_valid_seconds=$((MINIMUM_VALID_DAYS * 86400))
 openssl x509 -in "$desired_cert" -noout -checkhost "$CERTIFICATE_HOSTNAME" >/dev/null 2>&1 \
     || die "desired certificate does not match $CERTIFICATE_HOSTNAME"
-openssl x509 -in "$desired_cert" -noout -checkend "$minimum_valid_seconds" >/dev/null 2>&1 \
-    || die "desired certificate expires in less than $MINIMUM_VALID_DAYS days"
 desired_cert_public=$tmp_dir/desired-cert-public.der
 desired_key_public=$tmp_dir/desired-key-public.der
 openssl x509 -in "$desired_cert" -pubkey -noout 2>/dev/null \
@@ -364,6 +362,9 @@ if [ "$served_fingerprint" = "$desired_fingerprint" ]; then
     log "certificate already current; fingerprint=$desired_fingerprint"
     exit 0
 fi
+
+openssl x509 -in "$desired_cert" -noout -checkend "$minimum_valid_seconds" >/dev/null 2>&1 \
+    || die "changed certificate expires in less than $MINIMUM_VALID_DAYS days"
 
 opnsense_request GET '/api/trust/cert/search?rowCount=-1' "$search_json" \
     || die "cannot search OPNsense certificates"

@@ -1,6 +1,6 @@
 package:
   name: opnsense-cert-sync
-  version: 0.1.0
+  version: 0.1.1
   epoch: 0
   description: "Synchronize a cert-manager TLS Secret to the OPNsense Web GUI"
   copyright:
