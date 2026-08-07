@@ -407,8 +407,10 @@ jq -e '.result == "saved"' "$response_json" >/dev/null \
 
 empty_json=$tmp_dir/empty.json
 printf '{}\n' >"$empty_json"
-opnsense_request POST '/api/core/service/restart/webgui' "$response_json" "$empty_json" \
-    || die "OPNsense did not accept the Web GUI restart"
+if ! opnsense_request POST '/api/core/service/restart/webgui' \
+    "$response_json" "$empty_json"; then
+    log "Web GUI restart closed the API connection; verifying the served certificate"
+fi
 
 verified=0
 for _ in $(seq 1 12); do
@@ -448,9 +450,10 @@ if [ "$verified" -ne 1 ]; then
         opnsense_request POST "/api/trust/cert/set/$certificate_uuid" \
             "$response_json" "$update_json" \
             || die "cannot restore the previous OPNsense certificate"
-        opnsense_request POST '/api/core/service/restart/webgui' \
-            "$response_json" "$empty_json" \
-            || die "cannot restart the Web GUI after rollback"
+        if ! opnsense_request POST '/api/core/service/restart/webgui' \
+            "$response_json" "$empty_json"; then
+            log "Web GUI rollback restart closed the API connection"
+        fi
     fi
     die "certificate rotation failed and rollback was attempted"
 fi
