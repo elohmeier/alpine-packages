@@ -1,0 +1,19 @@
+# Kubernetes source. The provisioner replaces KUBE_API_SERVER and installs the
+# CA and narrowly scoped ServiceAccount token at the paths below.
+KUBE_API_SERVER=""
+KUBE_NAMESPACE=""
+KUBE_SECRET_NAME=""
+KUBE_CA_FILE="/etc/opnsense-cert-sync/kube-ca.crt"
+KUBE_TOKEN_FILE="/etc/opnsense-cert-sync/kube-token"
+
+# OPNsense target and dedicated API credential files.
+OPNSENSE_CONNECT_IP=""
+OPNSENSE_PORT="443"
+OPNSENSE_API_KEY_FILE="/etc/opnsense-cert-sync/opnsense-api-key"
+OPNSENSE_API_SECRET_FILE="/etc/opnsense-cert-sync/opnsense-api-secret"
+OPNSENSE_CERT_DESCRIPTION=""
+
+CERTIFICATE_HOSTNAME=""
+MINIMUM_VALID_DAYS="21"
+STATE_DIR="/var/lib/opnsense-cert-sync"
+LOCK_DIR="/run/opnsense-cert-sync.lock"

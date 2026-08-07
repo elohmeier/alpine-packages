@@ -1,0 +1,459 @@
+#!/bin/sh
+
+set -u
+
+program=${0##*/}
+config_file=${OPNSENSE_CERT_SYNC_CONFIG:-/etc/conf.d/opnsense-cert-sync}
+trust_current=0
+mode=sync
+tmp_dir=
+lock_dir=
+lock_owned=0
+state_loaded=0
+state_success=0
+state_last_attempt=0
+state_last_success=0
+state_not_after=0
+state_fingerprint=
+state_spki_pin=
+state_resource_version=
+
+usage() {
+    cat <<'EOF'
+Usage: opnsense-cert-sync [--check-config|--metrics|--trust-current-certificate]
+
+Fetch a cert-manager TLS Secret using narrowly scoped Kubernetes credentials,
+import a changed certificate into the selected OPNsense certificate entry,
+restart the Web GUI, and verify the served fingerprint.
+
+Options:
+  --check-config               Validate local configuration and credentials.
+  --metrics                    Print non-secret Influx line-protocol state.
+  --trust-current-certificate  One-time bootstrap: pin the certificate that
+                               OPNsense currently serves even if it is expired.
+EOF
+}
+
+case "${1:-}" in
+    "") ;;
+    -h|--help) usage; exit 0 ;;
+    --check-config) mode=check ;;
+    --metrics) mode=metrics ;;
+    --trust-current-certificate) trust_current=1 ;;
+    *) usage >&2; exit 2 ;;
+esac
+
+if [ "$mode" = metrics ]; then
+    metrics_state_file=${OPNSENSE_CERT_SYNC_METRICS_STATE:-/var/lib/opnsense-cert-sync/state}
+    if [ ! -r "$metrics_state_file" ]; then
+        printf 'opnsense_cert_sync configured=0i,success=0i,last_attempt=0i,last_success=0i,not_after=0i\n'
+        exit 0
+    fi
+    metric_value() {
+        metric=$(sed -n "s/^$1=//p" "$metrics_state_file" | head -n1)
+        case "$metric" in
+            ''|*[!0-9]*) printf '0' ;;
+            *) printf '%s' "$metric" ;;
+        esac
+    }
+    printf 'opnsense_cert_sync configured=1i,success=%si,last_attempt=%si,last_success=%si,not_after=%si\n' \
+        "$(metric_value success)" "$(metric_value last_attempt)" \
+        "$(metric_value last_success)" "$(metric_value not_after)"
+    exit 0
+fi
+
+# shellcheck disable=SC1090
+[ -f "$config_file" ] && . "$config_file"
+
+: "${KUBE_API_SERVER:=}"
+: "${KUBE_NAMESPACE:=}"
+: "${KUBE_SECRET_NAME:=}"
+: "${KUBE_CA_FILE:=/etc/opnsense-cert-sync/kube-ca.crt}"
+: "${KUBE_TOKEN_FILE:=/etc/opnsense-cert-sync/kube-token}"
+: "${OPNSENSE_CONNECT_IP:=}"
+: "${OPNSENSE_PORT:=443}"
+: "${OPNSENSE_API_KEY_FILE:=/etc/opnsense-cert-sync/opnsense-api-key}"
+: "${OPNSENSE_API_SECRET_FILE:=/etc/opnsense-cert-sync/opnsense-api-secret}"
+: "${OPNSENSE_CERT_DESCRIPTION:=}"
+: "${CERTIFICATE_HOSTNAME:=}"
+: "${MINIMUM_VALID_DAYS:=21}"
+: "${STATE_DIR:=/var/lib/opnsense-cert-sync}"
+: "${LOCK_DIR:=/run/opnsense-cert-sync.lock}"
+
+state_file=$STATE_DIR/state
+lock_dir=$LOCK_DIR
+OPNSENSE_BASE_URL=https://$CERTIFICATE_HOSTNAME
+[ "$OPNSENSE_PORT" = 443 ] \
+    || OPNSENSE_BASE_URL=$OPNSENSE_BASE_URL:$OPNSENSE_PORT
+
+log() {
+    logger -t "$program" -- "$*" 2>/dev/null || true
+    printf '%s %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*"
+}
+
+state_value() {
+    [ -f "$state_file" ] || return 0
+    sed -n "s/^$1=//p" "$state_file" | head -n1
+}
+
+load_state() {
+    [ "$state_loaded" -eq 0 ] || return 0
+    state_loaded=1
+    [ -f "$state_file" ] || return 0
+    state_success=$(state_value success)
+    state_last_attempt=$(state_value last_attempt)
+    state_last_success=$(state_value last_success)
+    state_not_after=$(state_value not_after)
+    state_fingerprint=$(state_value fingerprint)
+    state_spki_pin=$(state_value spki_pin)
+    state_resource_version=$(state_value resource_version)
+    : "${state_success:=0}"
+    : "${state_last_attempt:=0}"
+    : "${state_last_success:=0}"
+    : "${state_not_after:=0}"
+}
+
+write_state() {
+    new_success=$1
+    new_last_success=$2
+    new_not_after=$3
+    new_fingerprint=$4
+    new_spki_pin=$5
+    new_resource_version=$6
+    now=$(date -u '+%s')
+    mkdir -p "$STATE_DIR"
+    chmod 755 "$STATE_DIR"
+    state_tmp=$STATE_DIR/.state.$$
+    umask 077
+    {
+        printf 'success=%s\n' "$new_success"
+        printf 'last_attempt=%s\n' "$now"
+        printf 'last_success=%s\n' "$new_last_success"
+        printf 'not_after=%s\n' "$new_not_after"
+        printf 'fingerprint=%s\n' "$new_fingerprint"
+        printf 'spki_pin=%s\n' "$new_spki_pin"
+        printf 'resource_version=%s\n' "$new_resource_version"
+    } >"$state_tmp"
+    mv -f "$state_tmp" "$state_file"
+    chmod 644 "$state_file"
+}
+
+record_failure() {
+    load_state
+    write_state 0 "$state_last_success" "$state_not_after" \
+        "$state_fingerprint" "$state_spki_pin" "$state_resource_version"
+}
+
+die() {
+    log "ERROR: $*"
+    record_failure
+    exit 1
+}
+
+cleanup() {
+    [ -z "$tmp_dir" ] || rm -rf -- "$tmp_dir"
+    if [ "$lock_owned" -eq 1 ]; then
+        rmdir "$lock_dir" 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+
+require_file() {
+    [ -s "$1" ] || die "required file is missing or empty: $1"
+}
+
+validate_config() {
+    [ -n "$KUBE_NAMESPACE" ] || die "KUBE_NAMESPACE must be configured"
+    [ -n "$KUBE_SECRET_NAME" ] || die "KUBE_SECRET_NAME must be configured"
+    [ -n "$OPNSENSE_CONNECT_IP" ] || die "OPNSENSE_CONNECT_IP must be configured"
+    [ -n "$OPNSENSE_CERT_DESCRIPTION" ] \
+        || die "OPNSENSE_CERT_DESCRIPTION must be configured"
+    [ -n "$CERTIFICATE_HOSTNAME" ] \
+        || die "CERTIFICATE_HOSTNAME must be configured"
+    case "$KUBE_API_SERVER" in
+        https://*) ;;
+        *) die "KUBE_API_SERVER must be an https URL" ;;
+    esac
+    case "$OPNSENSE_PORT" in
+        ''|*[!0-9]*) die "OPNSENSE_PORT must be a TCP port number" ;;
+    esac
+    case "$MINIMUM_VALID_DAYS" in
+        ''|*[!0-9]*) die "MINIMUM_VALID_DAYS must be a positive integer" ;;
+        0) die "MINIMUM_VALID_DAYS must be greater than zero" ;;
+    esac
+    require_file "$KUBE_CA_FILE"
+    require_file "$KUBE_TOKEN_FILE"
+    require_file "$OPNSENSE_API_KEY_FILE"
+    require_file "$OPNSENSE_API_SECRET_FILE"
+}
+
+validate_config
+[ "$mode" != check ] || { log "configuration is complete"; exit 0; }
+
+if ! mkdir "$lock_dir" 2>/dev/null; then
+    log "another sync is already running"
+    exit 0
+fi
+lock_owned=1
+umask 077
+tmp_dir=$(mktemp -d /tmp/opnsense-cert-sync.XXXXXX) || die "cannot create temporary directory"
+
+kube_curl_config=$tmp_dir/kube.curl
+opnsense_netrc=$tmp_dir/opnsense.netrc
+kube_json=$tmp_dir/kube-secret.json
+desired_cert=$tmp_dir/desired.crt
+desired_key=$tmp_dir/desired.key
+served_cert=$tmp_dir/served.crt
+search_json=$tmp_dir/cert-search.json
+backup_json=$tmp_dir/cert-backup.json
+backup_cert=$tmp_dir/backup.crt
+backup_key=$tmp_dir/backup.key
+update_json=$tmp_dir/cert-update.json
+response_json=$tmp_dir/response.json
+
+kube_token=$(tr -d '\r\n' <"$KUBE_TOKEN_FILE")
+api_key=$(tr -d '\r\n' <"$OPNSENSE_API_KEY_FILE")
+api_secret=$(tr -d '\r\n' <"$OPNSENSE_API_SECRET_FILE")
+[ -n "$kube_token" ] || die "Kubernetes token is empty"
+[ -n "$api_key" ] || die "OPNsense API key is empty"
+[ -n "$api_secret" ] || die "OPNsense API secret is empty"
+printf 'header = "Authorization: Bearer %s"\n' "$kube_token" >"$kube_curl_config"
+printf 'machine %s login %s password %s\n' \
+    "$CERTIFICATE_HOSTNAME" "$api_key" "$api_secret" >"$opnsense_netrc"
+unset kube_token api_key api_secret
+
+if ! curl --silent --show-error --fail \
+    --connect-timeout 10 --max-time 30 \
+    --cacert "$KUBE_CA_FILE" --config "$kube_curl_config" \
+    --output "$kube_json" \
+    "$KUBE_API_SERVER/api/v1/namespaces/$KUBE_NAMESPACE/secrets/$KUBE_SECRET_NAME"; then
+    die "cannot fetch Kubernetes Secret $KUBE_NAMESPACE/$KUBE_SECRET_NAME"
+fi
+
+if ! jq -e '
+    .type == "kubernetes.io/tls"
+    and (.data["tls.crt"] | length) > 0
+    and (.data["tls.key"] | length) > 0
+' "$kube_json" >/dev/null; then
+    die "Kubernetes Secret is not a populated TLS Secret"
+fi
+jq -r '.data["tls.crt"]' "$kube_json" | base64 -d >"$desired_cert" \
+    || die "cannot decode tls.crt"
+jq -r '.data["tls.key"]' "$kube_json" | base64 -d >"$desired_key" \
+    || die "cannot decode tls.key"
+resource_version=$(jq -r '.metadata.resourceVersion // empty' "$kube_json")
+[ -n "$resource_version" ] || die "Kubernetes Secret has no resourceVersion"
+
+minimum_valid_seconds=$((MINIMUM_VALID_DAYS * 86400))
+openssl x509 -in "$desired_cert" -noout -checkhost "$CERTIFICATE_HOSTNAME" >/dev/null 2>&1 \
+    || die "desired certificate does not match $CERTIFICATE_HOSTNAME"
+openssl x509 -in "$desired_cert" -noout -checkend "$minimum_valid_seconds" >/dev/null 2>&1 \
+    || die "desired certificate expires in less than $MINIMUM_VALID_DAYS days"
+desired_cert_public=$tmp_dir/desired-cert-public.der
+desired_key_public=$tmp_dir/desired-key-public.der
+openssl x509 -in "$desired_cert" -pubkey -noout 2>/dev/null \
+    | openssl pkey -pubin -outform DER >"$desired_cert_public" 2>/dev/null \
+    || die "cannot read desired certificate public key"
+openssl pkey -in "$desired_key" -pubout -outform DER \
+    >"$desired_key_public" 2>/dev/null \
+    || die "cannot read desired private key"
+[ -s "$desired_cert_public" ] && [ -s "$desired_key_public" ] \
+    || die "desired certificate or private key has no public key"
+cmp -s "$desired_cert_public" "$desired_key_public" \
+    || die "desired certificate and private key do not match"
+desired_fingerprint=$(openssl x509 -in "$desired_cert" -noout -fingerprint -sha256 \
+    | sed 's/^[^=]*=//;s/://g' | tr '[:lower:]' '[:upper:]')
+desired_spki_pin=$(openssl x509 -in "$desired_cert" -pubkey -noout 2>/dev/null \
+    | openssl pkey -pubin -outform DER 2>/dev/null \
+    | openssl dgst -sha256 -binary 2>/dev/null \
+    | base64 | tr -d '\r\n')
+[ -n "$desired_fingerprint" ] && [ -n "$desired_spki_pin" ] \
+    || die "cannot derive desired certificate identity"
+not_after_text=$(openssl x509 -in "$desired_cert" -noout -enddate | sed 's/^[^=]*=//')
+not_after_epoch=$(date -u -d "$not_after_text" '+%s' 2>/dev/null) \
+    || die "cannot parse desired certificate expiry"
+
+fetch_served_certificate() {
+    output=$1
+    raw=$tmp_dir/served.raw
+    : >"$raw"
+    timeout 15 openssl s_client -connect "$OPNSENSE_CONNECT_IP:$OPNSENSE_PORT" \
+        -servername "$CERTIFICATE_HOSTNAME" -showcerts </dev/null >"$raw" 2>/dev/null || true
+    awk '
+        /-----BEGIN CERTIFICATE-----/ { capture=1 }
+        capture { print }
+        /-----END CERTIFICATE-----/ { exit }
+    ' "$raw" >"$output"
+    openssl x509 -in "$output" -noout >/dev/null 2>&1
+}
+
+certificate_fingerprint() {
+    openssl x509 -in "$1" -noout -fingerprint -sha256 \
+        | sed 's/^[^=]*=//;s/://g' | tr '[:lower:]' '[:upper:]'
+}
+
+certificate_spki_pin() {
+    openssl x509 -in "$1" -pubkey -noout 2>/dev/null \
+        | openssl pkey -pubin -outform DER 2>/dev/null \
+        | openssl dgst -sha256 -binary 2>/dev/null \
+        | base64 | tr -d '\r\n'
+}
+
+strict_probe() {
+    curl --silent --show-error --fail --output /dev/null \
+        --connect-timeout 5 --max-time 15 \
+        --resolve "$CERTIFICATE_HOSTNAME:$OPNSENSE_PORT:$OPNSENSE_CONNECT_IP" \
+        "$OPNSENSE_BASE_URL/"
+}
+
+fetch_served_certificate "$served_cert" || die "OPNsense did not present a certificate"
+served_fingerprint=$(certificate_fingerprint "$served_cert")
+served_spki_pin=$(certificate_spki_pin "$served_cert")
+[ -n "$served_fingerprint" ] && [ -n "$served_spki_pin" ] \
+    || die "cannot derive the served certificate identity"
+tls_mode=strict
+active_pin=
+if ! strict_probe >/dev/null 2>&1; then
+    load_state
+    if [ -n "$state_spki_pin" ] && [ "$state_spki_pin" = "$served_spki_pin" ]; then
+        tls_mode=pinned
+        active_pin=$served_spki_pin
+        log "using the previously verified OPNsense SPKI pin"
+    elif [ "$trust_current" -eq 1 ]; then
+        tls_mode=pinned
+        active_pin=$served_spki_pin
+        log "bootstrapping trust in the currently served OPNsense SPKI"
+    else
+        die "OPNsense TLS validation failed and its SPKI is not pinned"
+    fi
+fi
+
+opnsense_request() {
+    request_method=$1
+    request_path=$2
+    request_output=$3
+    request_data=${4:-}
+    if [ "$tls_mode" = pinned ]; then
+        tls_args="--insecure --pinnedpubkey sha256//$active_pin"
+    else
+        tls_args=
+    fi
+    if [ -n "$request_data" ]; then
+        # shellcheck disable=SC2086
+        curl --silent --show-error --fail --connect-timeout 5 --max-time 30 \
+            --resolve "$CERTIFICATE_HOSTNAME:$OPNSENSE_PORT:$OPNSENSE_CONNECT_IP" \
+            --netrc-file "$opnsense_netrc" $tls_args \
+            --request "$request_method" --header 'Content-Type: application/json' \
+            --data-binary "@$request_data" --output "$request_output" \
+            "$OPNSENSE_BASE_URL$request_path"
+    else
+        # shellcheck disable=SC2086
+        curl --silent --show-error --fail --connect-timeout 5 --max-time 30 \
+            --resolve "$CERTIFICATE_HOSTNAME:$OPNSENSE_PORT:$OPNSENSE_CONNECT_IP" \
+            --netrc-file "$opnsense_netrc" $tls_args \
+            --request "$request_method" --output "$request_output" \
+            "$OPNSENSE_BASE_URL$request_path"
+    fi
+}
+
+if [ "$served_fingerprint" = "$desired_fingerprint" ]; then
+    now=$(date -u '+%s')
+    write_state 1 "$now" "$not_after_epoch" "$desired_fingerprint" \
+        "$desired_spki_pin" "$resource_version"
+    log "certificate already current; fingerprint=$desired_fingerprint"
+    exit 0
+fi
+
+opnsense_request GET '/api/trust/cert/search?rowCount=-1' "$search_json" \
+    || die "cannot search OPNsense certificates"
+certificate_uuid=$(jq -r --arg description "$OPNSENSE_CERT_DESCRIPTION" '
+    [.rows[] | select(.descr == $description and .in_use == "1")]
+    | if length == 1 then .[0].uuid else empty end
+' "$search_json")
+[ -n "$certificate_uuid" ] \
+    || die "expected exactly one in-use OPNsense certificate named $OPNSENSE_CERT_DESCRIPTION"
+
+opnsense_request GET "/api/trust/cert/get/$certificate_uuid" "$backup_json" \
+    || die "cannot back up the selected OPNsense certificate"
+jq -er '.cert.crt_payload' "$backup_json" >"$backup_cert" \
+    || die "OPNsense certificate backup has no certificate"
+jq -er '.cert.prv_payload' "$backup_json" >"$backup_key" \
+    || die "OPNsense certificate backup has no private key"
+backup_fingerprint=$(certificate_fingerprint "$backup_cert") \
+    || die "cannot parse the OPNsense certificate backup"
+backup_spki_pin=$(certificate_spki_pin "$backup_cert") \
+    || die "cannot parse the OPNsense backup public key"
+[ -n "$backup_fingerprint" ] && [ -n "$backup_spki_pin" ] \
+    || die "cannot derive the OPNsense backup certificate identity"
+
+jq -n --arg description "$OPNSENSE_CERT_DESCRIPTION" \
+    --rawfile certificate "$desired_cert" --rawfile private_key "$desired_key" '
+    {
+      cert: {
+        action: "import",
+        descr: $description,
+        crt_payload: $certificate,
+        prv_payload: $private_key
+      }
+    }
+' >"$update_json"
+opnsense_request POST "/api/trust/cert/set/$certificate_uuid" "$response_json" "$update_json" \
+    || die "OPNsense rejected the certificate update"
+jq -e '.result == "saved"' "$response_json" >/dev/null \
+    || die "OPNsense did not save the certificate update"
+
+empty_json=$tmp_dir/empty.json
+printf '{}\n' >"$empty_json"
+opnsense_request POST '/api/core/service/restart/webgui' "$response_json" "$empty_json" \
+    || die "OPNsense did not accept the Web GUI restart"
+
+verified=0
+for _ in $(seq 1 12); do
+    sleep 5
+    if fetch_served_certificate "$served_cert" \
+        && [ "$(certificate_fingerprint "$served_cert")" = "$desired_fingerprint" ] \
+        && strict_probe >/dev/null 2>&1; then
+        verified=1
+        break
+    fi
+done
+
+if [ "$verified" -ne 1 ]; then
+    log "new certificate verification failed; attempting rollback"
+    if fetch_served_certificate "$served_cert"; then
+        current_fingerprint=$(certificate_fingerprint "$served_cert")
+        if [ "$current_fingerprint" = "$desired_fingerprint" ]; then
+            tls_mode=pinned
+            active_pin=$desired_spki_pin
+        elif [ "$current_fingerprint" = "$backup_fingerprint" ]; then
+            tls_mode=pinned
+            active_pin=$backup_spki_pin
+        else
+            die "cannot authenticate OPNsense for rollback"
+        fi
+        jq -n --arg description "$OPNSENSE_CERT_DESCRIPTION" \
+            --rawfile certificate "$backup_cert" --rawfile private_key "$backup_key" '
+            {
+              cert: {
+                action: "import",
+                descr: $description,
+                crt_payload: $certificate,
+                prv_payload: $private_key
+              }
+            }
+        ' >"$update_json"
+        opnsense_request POST "/api/trust/cert/set/$certificate_uuid" \
+            "$response_json" "$update_json" \
+            || die "cannot restore the previous OPNsense certificate"
+        opnsense_request POST '/api/core/service/restart/webgui' \
+            "$response_json" "$empty_json" \
+            || die "cannot restart the Web GUI after rollback"
+    fi
+    die "certificate rotation failed and rollback was attempted"
+fi
+
+now=$(date -u '+%s')
+write_state 1 "$now" "$not_after_epoch" "$desired_fingerprint" \
+    "$desired_spki_pin" "$resource_version"
+log "certificate rotated and verified; fingerprint=$desired_fingerprint not_after=$not_after_text"

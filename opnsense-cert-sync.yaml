@@ -1,0 +1,74 @@
+package:
+  name: opnsense-cert-sync
+  version: 0.1.0
+  epoch: 0
+  description: "Synchronize a cert-manager TLS Secret to the OPNsense Web GUI"
+  copyright:
+    - license: Apache-2.0
+  dependencies:
+    runtime:
+      - busybox
+      - ca-certificates
+      - curl
+      - jq
+      - openssl
+  target-architecture:
+    - x86_64
+    - aarch64
+  scriptlets:
+    post-install: |
+      #!/bin/sh
+      rc-update add crond default 2>/dev/null || true
+      rc-service crond status >/dev/null 2>&1 || rc-service crond start 2>/dev/null || true
+      echo "Configure /etc/conf.d/opnsense-cert-sync before the first run."
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+
+pipeline:
+  - runs: |
+      install -Dm755 opnsense-cert-sync/opnsense-cert-sync \
+        "${{targets.destdir}}"/usr/bin/opnsense-cert-sync
+      install -Dm644 opnsense-cert-sync/opnsense-cert-sync.confd \
+        "${{targets.destdir}}"/etc/conf.d/opnsense-cert-sync
+      install -Dm755 opnsense-cert-sync/opnsense-cert-sync.hourly \
+        "${{targets.destdir}}"/etc/periodic/hourly/opnsense-cert-sync
+      install -dm755 "${{targets.destdir}}"/var/lib/opnsense-cert-sync
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+        - ca-certificates
+        - curl
+        - jq
+        - openssl
+  pipeline:
+    - name: "Verify installed files"
+      runs: |
+        test -x /usr/bin/opnsense-cert-sync
+        test -f /etc/conf.d/opnsense-cert-sync
+        test -x /etc/periodic/hourly/opnsense-cert-sync
+        test -d /var/lib/opnsense-cert-sync
+    - name: "Check shell syntax and help"
+      runs: |
+        sh -n /usr/bin/opnsense-cert-sync
+        sh -n /etc/periodic/hourly/opnsense-cert-sync
+        /usr/bin/opnsense-cert-sync --help | grep -q "trust-current-certificate"
+    - name: "Emit safe unconfigured metrics"
+      runs: |
+        /usr/bin/opnsense-cert-sync --metrics \
+          | grep -q '^opnsense_cert_sync configured=0i,success=0i'

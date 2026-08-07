@@ -26,6 +26,7 @@ apk update
 | **adaptive-lighting**        | Home Assistant custom integration for adaptive lighting                                   | x86_64, aarch64 |
 | **home-assistant-container** | Home Assistant Core - Podman container                                                    | x86_64, aarch64 |
 | **home-assistant-watch**     | Watchdog: restart Home Assistant if its recorder stops writing                            | x86_64, aarch64 |
+| **opnsense-cert-sync**       | Synchronize a cert-manager certificate to the OPNsense Web GUI                            | x86_64, aarch64 |
 | **matter-server**            | Open Home Foundation Matter Server - WebSocket-based Matter controller for Home Assistant | x86_64, aarch64 |
 | **chip-sdk**                 | Matter/CHIP SDK Python bindings                                                           | x86_64, aarch64 |
 | **otbr**                     | OpenThread Border Router for Thread/Matter networks                                       | x86_64, aarch64 |
@@ -167,6 +168,27 @@ rc-update add home-assistant-watch default
 - **Defaults:** probe every 60s, restart after 5 consecutive failures, 5-min grace period, 30-min minimum between restarts
 
 Generate `HASS_WATCH_TOKEN` via HA UI → Profile → Security → Long-lived Access Tokens. Pick `HASS_WATCH_ENTITY` carefully — it must update at least every couple of minutes, otherwise the probe falsely concludes the recorder is dead. Power meters, ESPHome BME280s, and similar high-rate sensors work well.
+
+### opnsense-cert-sync
+
+Hourly, fingerprint-driven synchronization of a cert-manager TLS Secret to the
+certificate entry selected by the OPNsense Web GUI. Certificate and private-key
+matching is checked before import, and the served certificate is verified after
+the Web GUI restart. Kubernetes and OPNsense credentials are read from root-only
+files provisioned separately.
+
+```sh
+apk add opnsense-cert-sync
+$EDITOR /etc/conf.d/opnsense-cert-sync
+opnsense-cert-sync --check-config
+opnsense-cert-sync
+```
+
+- **Schedule:** `/etc/periodic/hourly/opnsense-cert-sync`
+- **Config:** `/etc/conf.d/opnsense-cert-sync`
+- **State:** `/var/lib/opnsense-cert-sync/state` (fingerprints and timestamps only)
+- **Recovery:** an expired currently served certificate is trusted only when its
+  SPKI matches the last successfully installed pin
 
 ### matter-server
 
