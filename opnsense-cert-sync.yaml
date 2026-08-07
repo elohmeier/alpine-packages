@@ -1,6 +1,6 @@
 package:
   name: opnsense-cert-sync
-  version: 0.1.1
+  version: 0.1.2
   epoch: 0
   description: "Synchronize a cert-manager TLS Secret to the OPNsense Web GUI"
   copyright:
@@ -68,6 +68,16 @@ test:
         sh -n /usr/bin/opnsense-cert-sync
         sh -n /etc/periodic/hourly/opnsense-cert-sync
         /usr/bin/opnsense-cert-sync --help | grep -q "trust-current-certificate"
+    - name: "Parse certificate expiry with BusyBox date"
+      runs: |
+        test_dir=$(mktemp -d)
+        trap 'rm -rf -- "$test_dir"' EXIT
+        openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+          -subj '/CN=opnsense.example.com' \
+          -keyout "$test_dir/tls.key" -out "$test_dir/tls.crt" >/dev/null 2>&1
+        not_after=$(openssl x509 -in "$test_dir/tls.crt" -noout \
+          -enddate -dateopt iso_8601 | sed 's/^[^=]*=//;s/Z$//')
+        date -u -d "$not_after" '+%s' | grep -Eq '^[0-9]+$'
     - name: "Emit safe unconfigured metrics"
       runs: |
         /usr/bin/opnsense-cert-sync --metrics \

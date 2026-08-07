@@ -268,8 +268,9 @@ desired_spki_pin=$(openssl x509 -in "$desired_cert" -pubkey -noout 2>/dev/null \
     | base64 | tr -d '\r\n')
 [ -n "$desired_fingerprint" ] && [ -n "$desired_spki_pin" ] \
     || die "cannot derive desired certificate identity"
-not_after_text=$(openssl x509 -in "$desired_cert" -noout -enddate | sed 's/^[^=]*=//')
-not_after_epoch=$(date -u -d "$not_after_text" '+%s' 2>/dev/null) \
+not_after_text=$(openssl x509 -in "$desired_cert" -noout \
+    -enddate -dateopt iso_8601 | sed 's/^[^=]*=//')
+not_after_epoch=$(date -u -d "${not_after_text%Z}" '+%s' 2>/dev/null) \
     || die "cannot parse desired certificate expiry"
 
 fetch_served_certificate() {
