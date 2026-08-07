@@ -1,6 +1,6 @@
 package:
   name: codex
-  version: "0.146.1"
+  version: "0.147.0"
   epoch: 0
   description: "OpenAI Codex CLI - coding agent for the terminal"
   copyright:
