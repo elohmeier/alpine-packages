@@ -3,79 +3,149 @@
 
 import argparse
 import asyncio
-import json
+import getpass
 import sys
 
 import aiohttp
+from matter_server.client.client import MatterClient
+from matter_server.client.exceptions import MatterClientException
+from matter_server.common.errors import MatterError
 
 
-async def commission(code: str, host: str = "localhost", port: int = 5580) -> int:
-    """Commission a Matter device with the given pairing code."""
+async def wait_until_ready(
+    init_ready: asyncio.Event,
+    listener: asyncio.Task[None],
+    timeout: int = 10,
+) -> None:
+    """Wait for initial node data while surfacing listener failures promptly."""
+    ready_waiter = asyncio.create_task(init_ready.wait())
+    try:
+        done, _ = await asyncio.wait(
+            (ready_waiter, listener),
+            timeout=timeout,
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if ready_waiter in done:
+            return
+        if listener in done:
+            await listener
+            raise ConnectionError("Matter server listener stopped during startup")
+        raise asyncio.TimeoutError
+    finally:
+        if not ready_waiter.done():
+            ready_waiter.cancel()
+        await asyncio.gather(ready_waiter, return_exceptions=True)
+
+
+async def run(
+    code: str | None,
+    host: str = "localhost",
+    port: int = 5580,
+    check: bool = False,
+) -> int:
+    """Check the server or commission a device through the Matter client."""
     url = f"ws://{host}:{port}/ws"
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.ws_connect(url) as ws:
-                # Get initial state
-                msg = await asyncio.wait_for(ws.receive(), timeout=5)
-                if isinstance(msg.data, bytes):
-                    state = json.loads(msg.data[2:].decode())
-                else:
-                    state = json.loads(msg.data)
+            client = MatterClient(url, session)
+            init_ready = asyncio.Event()
+            listener = asyncio.create_task(client.start_listening(init_ready))
 
-                if not state.get("thread_credentials_set"):
-                    print("Warning: Thread credentials not set in matter-server", file=sys.stderr)
+            try:
+                await wait_until_ready(init_ready, listener)
 
-                # Send commission command
-                await ws.send_json({
-                    "message_id": "1",
-                    "command": "commission_with_code",
-                    "args": {"code": code.replace("-", "")}
-                })
+                if check:
+                    info = client.server_info
+                    print(f"Matter server reachable at {url}")
+                    print(f"  Nodes loaded:           {len(client.get_nodes())}")
+                    print(
+                        "  Bluetooth enabled:      "
+                        f"{'yes' if info.bluetooth_enabled else 'no'}"
+                    )
+                    print(
+                        "  Thread credentials set: "
+                        f"{'yes' if info.thread_credentials_set else 'no'}"
+                    )
+                    return 0
 
-                print(f"Commissioning with code {code}...")
+                if code is None:
+                    raise ValueError("A setup code is required for commissioning")
 
-                # Wait for result
-                msg = await asyncio.wait_for(ws.receive(), timeout=180)
-                if isinstance(msg.data, bytes):
-                    result = json.loads(msg.data[2:].decode())
-                else:
-                    result = json.loads(msg.data)
+                if not client.server_info.thread_credentials_set:
+                    print(
+                        "Warning: Thread credentials are not set in matter-server",
+                        file=sys.stderr,
+                    )
 
-                if "error_code" in result:
-                    print(f"Error: {result.get('details', 'Commission failed')}", file=sys.stderr)
-                    return 1
+                print("Commissioning device...")
+                node = await asyncio.wait_for(
+                    client.commission_with_code(code.strip()), timeout=180
+                )
+                vendor = node.attributes.get("0/40/1", "Unknown")
+                product = node.attributes.get("0/40/3", "Unknown")
 
-                node = result.get("result", {})
-                node_id = node.get("node_id")
-                attrs = node.get("attributes", {})
-                vendor = attrs.get("0/40/1", "Unknown")
-                product = attrs.get("0/40/3", "Unknown")
-
-                print(f"Success! Node ID: {node_id}")
+                print(f"Success! Node ID: {node.node_id}")
                 print(f"  Vendor:  {vendor}")
                 print(f"  Product: {product}")
                 return 0
+            finally:
+                await client.disconnect()
+                if not listener.done():
+                    listener.cancel()
+                await asyncio.gather(listener, return_exceptions=True)
 
     except asyncio.TimeoutError:
-        print("Error: Timeout waiting for commissioning", file=sys.stderr)
+        print("Error: Timeout communicating with matter-server", file=sys.stderr)
         return 1
-    except aiohttp.ClientError as e:
-        print(f"Error: Cannot connect to matter-server at {url}: {e}", file=sys.stderr)
+    except (
+        aiohttp.ClientError,
+        MatterClientException,
+        MatterError,
+        OSError,
+        ValueError,
+    ) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
         return 1
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Commission a Matter device",
-        epilog="Example: matter-commission 1234-567-8901"
+        description="Commission a Matter device through matter-server",
+        epilog=(
+            "Omit CODE to enter it using a no-echo prompt. "
+            "Example: matter-commission"
+        ),
     )
-    parser.add_argument("code", help="Matter pairing code (e.g., 1234-567-8901)")
+    parser.add_argument(
+        "code",
+        nargs="?",
+        help="Matter QR payload or manual setup code (omit for a secure prompt)",
+    )
     parser.add_argument("--host", default="localhost", help="Matter server host")
     parser.add_argument("--port", type=int, default=5580, help="Matter server port")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Check connectivity and load nodes without commissioning",
+    )
 
     args = parser.parse_args()
-    sys.exit(asyncio.run(commission(args.code, args.host, args.port)))
+    if args.check and args.code:
+        parser.error("CODE cannot be used with --check")
+
+    code = args.code
+    if not args.check and code is None:
+        code = getpass.getpass("Matter setup code: ")
+        if not code.strip():
+            parser.error("a non-empty setup code is required")
+
+    try:
+        result = asyncio.run(run(code, args.host, args.port, args.check))
+    except KeyboardInterrupt:
+        print("\nCommissioning cancelled", file=sys.stderr)
+        result = 130
+    sys.exit(result)
 
 
 if __name__ == "__main__":
