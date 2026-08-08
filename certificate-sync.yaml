@@ -1,0 +1,91 @@
+package:
+  name: certificate-sync
+  version: 0.1.0
+  epoch: 0
+  description: "Synchronize cert-manager TLS Secrets to infrastructure appliances"
+  copyright:
+    - license: Apache-2.0
+  dependencies:
+    runtime:
+      - busybox
+      - ca-certificates
+      - curl
+      - jq
+      - openssh-client
+      - openssl
+  target-architecture:
+    - x86_64
+    - aarch64
+  scriptlets:
+    post-install: |
+      #!/bin/sh
+      rc-update add crond default 2>/dev/null || true
+      rc-service crond status >/dev/null 2>&1 || rc-service crond start 2>/dev/null || true
+      echo "Add one configuration per appliance to /etc/certificate-sync.d/."
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+
+pipeline:
+  - runs: |
+      install -Dm755 certificate-sync/certificate-sync \
+        "${{targets.destdir}}"/usr/bin/certificate-sync
+      install -Dm644 certificate-sync/certificate-sync.confd \
+        "${{targets.destdir}}"/etc/conf.d/certificate-sync
+      install -Dm755 certificate-sync/certificate-sync.hourly \
+        "${{targets.destdir}}"/etc/periodic/hourly/certificate-sync
+      install -Dm644 certificate-sync/adapters/opnsense.sh \
+        "${{targets.destdir}}"/usr/libexec/certificate-sync/opnsense.sh
+      install -Dm644 certificate-sync/adapters/openccu-ssh.sh \
+        "${{targets.destdir}}"/usr/libexec/certificate-sync/openccu-ssh.sh
+      install -Dm755 certificate-sync/openccu-install \
+        "${{targets.destdir}}"/usr/share/certificate-sync/openccu-install
+      install -dm700 "${{targets.destdir}}"/etc/certificate-sync
+      install -dm700 "${{targets.destdir}}"/etc/certificate-sync.d
+      install -dm755 "${{targets.destdir}}"/var/lib/certificate-sync
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+        - ca-certificates
+        - curl
+        - jq
+        - openssh-client
+        - openssl
+  pipeline:
+    - name: "Verify installed files"
+      runs: |
+        test -x /usr/bin/certificate-sync
+        test -f /etc/conf.d/certificate-sync
+        test -x /etc/periodic/hourly/certificate-sync
+        test -f /usr/libexec/certificate-sync/opnsense.sh
+        test -f /usr/libexec/certificate-sync/openccu-ssh.sh
+        test -x /usr/share/certificate-sync/openccu-install
+        test "$(stat -c '%a' /etc/certificate-sync.d)" = 700
+    - name: "Check shell syntax and help"
+      runs: |
+        sh -n /usr/bin/certificate-sync
+        sh -n /usr/libexec/certificate-sync/opnsense.sh
+        sh -n /usr/libexec/certificate-sync/openccu-ssh.sh
+        sh -n /usr/share/certificate-sync/openccu-install
+        sh -n /etc/periodic/hourly/certificate-sync
+        /usr/bin/certificate-sync --help | grep -q -- '--target'
+    - name: "Emit safe unconfigured metrics"
+      runs: |
+        CERTIFICATE_SYNC_CONFIG=/does-not-exist \
+          /usr/bin/certificate-sync --metrics \
+          | grep -q '^certificate_sync configured=0i,success=0i'

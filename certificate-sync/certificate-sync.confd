@@ -1,0 +1,10 @@
+# Shared Kubernetes source credential. Each target selects one explicitly
+# authorized Secret in /etc/certificate-sync.d/<target>.conf.
+KUBE_API_SERVER=""
+KUBE_CA_FILE="/etc/certificate-sync/kube-ca.crt"
+KUBE_TOKEN_FILE="/etc/certificate-sync/kube-token"
+
+TARGET_CONFIG_DIR="/etc/certificate-sync.d"
+ADAPTER_DIR="/usr/libexec/certificate-sync"
+STATE_BASE_DIR="/var/lib/certificate-sync"
+LOCK_BASE_DIR="/run/certificate-sync"

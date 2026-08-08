@@ -26,6 +26,7 @@ apk update
 | **adaptive-lighting**        | Home Assistant custom integration for adaptive lighting                                   | x86_64, aarch64 |
 | **home-assistant-container** | Home Assistant Core - Podman container                                                    | x86_64, aarch64 |
 | **home-assistant-watch**     | Watchdog: restart Home Assistant if its recorder stops writing                            | x86_64, aarch64 |
+| **certificate-sync**         | Synchronize cert-manager certificates to multiple infrastructure appliances               | x86_64, aarch64 |
 | **opnsense-cert-sync**       | Synchronize a cert-manager certificate to the OPNsense Web GUI                            | x86_64, aarch64 |
 | **matter-server**            | Open Home Foundation Matter Server - WebSocket-based Matter controller for Home Assistant | x86_64, aarch64 |
 | **chip-sdk**                 | Matter/CHIP SDK Python bindings                                                           | x86_64, aarch64 |
@@ -168,6 +169,28 @@ rc-update add home-assistant-watch default
 - **Defaults:** probe every 60s, restart after 5 consecutive failures, 5-min grace period, 30-min minimum between restarts
 
 Generate `HASS_WATCH_TOKEN` via HA UI → Profile → Security → Long-lived Access Tokens. Pick `HASS_WATCH_ENTITY` carefully — it must update at least every couple of minutes, otherwise the probe falsely concludes the recorder is dead. Power meters, ESPHome BME280s, and similar high-rate sensors work well.
+
+### certificate-sync
+
+Reusable certificate delivery for appliances that cannot consume cert-manager
+Secrets directly. Each `/etc/certificate-sync.d/<target>.conf` selects one TLS
+Secret and one adapter. Included adapters support the OPNsense certificate API
+and a forced-command SSH installer for OpenCCU.
+
+```sh
+apk add certificate-sync
+$EDITOR /etc/conf.d/certificate-sync
+$EDITOR /etc/certificate-sync.d/gateway.conf
+certificate-sync --check-config
+certificate-sync --all
+```
+
+- **Schedule:** `/etc/periodic/hourly/certificate-sync`
+- **Targets:** `/etc/certificate-sync.d/*.conf`
+- **State:** `/var/lib/certificate-sync/<target>/state` (non-secret)
+- **Metrics:** `certificate-sync --metrics` emits `target` and `hostname` tags
+- **Safety:** adapters validate before delivery, verify the live fingerprint
+  and strict TLS afterward, and roll back their appliance independently
 
 ### opnsense-cert-sync
 
