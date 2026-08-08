@@ -1,0 +1,62 @@
+package:
+  name: homematicip-local
+  version: "2.9.0"
+  epoch: 0
+  description: "Local Homematic and Homematic IP integration for Home Assistant"
+  copyright:
+    - license: MIT
+  target-architecture:
+    - x86_64
+    - aarch64
+  scriptlets:
+    post-install: |
+      #!/bin/sh
+      chown -R homeassistant:homeassistant /var/lib/homeassistant/custom_components/homematicip_local 2>/dev/null || true
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/SukramJ/homematicip_local.git
+      tag: ${{package.version}}
+      expected-commit: 39147baeb4a5e227d9f503abe1262a04f271c48b
+
+  - runs: |
+      install -dm755 "${{targets.destdir}}/var/lib/homeassistant/custom_components"
+      cp -r custom_components/homematicip_local \
+        "${{targets.destdir}}/var/lib/homeassistant/custom_components/"
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+        - python3
+  pipeline:
+    - runs: |
+        test -d /var/lib/homeassistant/custom_components/homematicip_local
+        test -f /var/lib/homeassistant/custom_components/homematicip_local/__init__.py
+        test -f /var/lib/homeassistant/custom_components/homematicip_local/manifest.json
+    - runs: |
+        python3 -c "
+        import json
+        with open('/var/lib/homeassistant/custom_components/homematicip_local/manifest.json') as f:
+            m = json.load(f)
+            assert m['domain'] == 'homematicip_local', 'Wrong domain'
+            assert m['version'] == '${{package.version}}', 'Wrong version'
+            print(f\"Homematic(IP) Local v{m['version']} installed successfully\")
+        "

@@ -24,6 +24,7 @@ apk update
 | Package                      | Description                                                                               | Architectures   |
 | ---------------------------- | ----------------------------------------------------------------------------------------- | --------------- |
 | **adaptive-lighting**        | Home Assistant custom integration for adaptive lighting                                   | x86_64, aarch64 |
+| **homematicip-local**        | Local Homematic and Homematic IP integration for Home Assistant                            | x86_64, aarch64 |
 | **home-assistant-container** | Home Assistant Core - Podman container                                                    | x86_64, aarch64 |
 | **home-assistant-watch**     | Watchdog: restart Home Assistant if its recorder stops writing                            | x86_64, aarch64 |
 | **certificate-sync**         | Synchronize cert-manager certificates to multiple infrastructure appliances               | x86_64, aarch64 |
@@ -94,6 +95,20 @@ rc-service home-assistant-container restart
 - **Requires:** home-assistant-container
 
 After installing, configure via Home Assistant Settings → Devices & Services → Add Integration → Adaptive Lighting.
+
+### homematicip-local
+
+Actively maintained local integration for Homematic and Homematic IP devices connected to a CCU.
+
+```sh
+apk add homematicip-local
+rc-service home-assistant-container restart
+```
+
+- **Location:** `/var/lib/homeassistant/custom_components/homematicip_local/`
+- **Requires:** Home Assistant 2026.7.0 or newer
+
+After installing, configure via Home Assistant Settings → Devices & Services → Add Integration → Homematic(IP) Local for OpenCCU.
 
 ### home-assistant-container
 

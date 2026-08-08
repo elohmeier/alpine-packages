@@ -59,7 +59,7 @@
     {
       "customType": "regex",
       "description": "GitHub repos with tag $version (no v prefix)",
-      "fileMatch": ["^ssh-to-age\\.yaml$"],
+      "fileMatch": ["^(homematicip-local|ssh-to-age)\\.yaml$"],
       "matchStrings": [
         "version: \"?(?<currentValue>[^\"\\n]+)\"?\\n[\\s\\S]*?repository: https://github\\.com/(?<depName>[^\\n]+)\\.git\\n\\s+tag: \\$"
       ],
@@ -125,7 +125,8 @@
       "matchDepNames": [
         "basnijholt/adaptive-lighting",
         "littleyoda/ha-pysmaplus",
-        "slashback100/presence_simulation"
+        "slashback100/presence_simulation",
+        "SukramJ/homematicip_local"
       ]
     },
     {
