@@ -1,6 +1,6 @@
 package:
   name: hf40-restic-backup
-  version: 0.1.0
+  version: 0.1.1
   epoch: 0
   description: "Root restic backup runtime for hf40 Alpine hosts"
   copyright:
@@ -10,6 +10,7 @@ package:
       - busybox
       - ca-certificates
       - flock
+      - openssl
       - restic
   target-architecture:
     - x86_64
@@ -43,7 +44,7 @@ pipeline:
       install -m600 hf40-restic-backup/excludes.txt \
         "${{targets.destdir}}"/etc/hf40-restic/excludes.txt
       install -dm700 "${{targets.destdir}}"/var/cache/hf40-restic
-      install -dm700 "${{targets.destdir}}"/var/lib/hf40-restic
+      install -dm755 "${{targets.destdir}}"/var/lib/hf40-restic
 
 test:
   environment:
@@ -69,6 +70,7 @@ test:
         test "$(stat -c '%a' /etc/hf40-restic)" = 700
         test "$(stat -c '%a' /etc/hf40-restic/backup.paths)" = 600
         test "$(stat -c '%a' /etc/hf40-restic/excludes.txt)" = 600
+        test "$(stat -c '%a' /var/lib/hf40-restic)" = 755
     - name: "Check shell syntax and safe unconfigured failure"
       runs: |
         sh -n /usr/bin/hf40-restic-backup

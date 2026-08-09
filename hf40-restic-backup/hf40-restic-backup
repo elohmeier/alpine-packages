@@ -13,6 +13,7 @@ paths_file="$config_dir/backup.paths"
 excludes_file="$config_dir/excludes.txt"
 hostname_file="$config_dir/hostname"
 status_file="$state_dir/status"
+metrics_file="$state_dir/metrics"
 lock_file="$state_dir/backup.lock"
 
 log() {
@@ -30,7 +31,8 @@ fi
 
 umask 077
 mkdir -p "$state_dir" "$cache_dir"
-chmod 700 "$state_dir" "$cache_dir"
+chmod 755 "$state_dir"
+chmod 700 "$cache_dir"
 
 exec 9>"$lock_file"
 if ! flock -n 9; then
@@ -64,6 +66,32 @@ write_status() {
 	} >"$tmp_status"
 	chmod 600 "$tmp_status"
 	mv -f "$tmp_status" "$status_file"
+
+	configured=1
+	for required_file in \
+		"$repository_file" \
+		"$password_file" \
+		"$client_pem" \
+		"$paths_file" \
+		"$excludes_file"; do
+		[ -s "$required_file" ] || configured=0
+	done
+	certificate_valid_30d=0
+	certificate_valid_7d=0
+	if command -v openssl >/dev/null 2>&1; then
+		if openssl x509 -in "$client_pem" -noout -checkend 2592000 >/dev/null 2>&1; then
+			certificate_valid_30d=1
+		fi
+		if openssl x509 -in "$client_pem" -noout -checkend 604800 >/dev/null 2>&1; then
+			certificate_valid_7d=1
+		fi
+	fi
+	tmp_metrics=$(mktemp "$state_dir/.metrics.XXXXXX")
+	printf '%s\n' \
+		"restic_backup configured=${configured}i,running=${running}i,success=${success}i,last_exit_code=${exit_code}i,last_attempt=${attempt_started}i,last_success=${last_success}i,duration_seconds=${duration}i,certificate_valid_30d=${certificate_valid_30d}i,certificate_valid_7d=${certificate_valid_7d}i,implementation_version=${implementation_version}i" \
+		>"$tmp_metrics"
+	chmod 644 "$tmp_metrics"
+	mv -f "$tmp_metrics" "$metrics_file"
 }
 
 on_exit() {
