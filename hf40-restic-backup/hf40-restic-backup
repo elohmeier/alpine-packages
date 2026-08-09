@@ -1,0 +1,138 @@
+#!/bin/sh
+set -eu
+
+implementation_version=1
+config_dir=${HF40_RESTIC_CONFIG_DIR:-/etc/hf40-restic}
+state_dir=${HF40_RESTIC_STATE_DIR:-/var/lib/hf40-restic}
+cache_dir=${HF40_RESTIC_CACHE_DIR:-/var/cache/hf40-restic}
+
+repository_file="$config_dir/repository"
+password_file="$config_dir/password"
+client_pem="$config_dir/client.pem"
+paths_file="$config_dir/backup.paths"
+excludes_file="$config_dir/excludes.txt"
+hostname_file="$config_dir/hostname"
+status_file="$state_dir/status"
+lock_file="$state_dir/backup.lock"
+
+log() {
+	printf '%s %s\n' "[hf40-restic]" "$(date -Iseconds) $*"
+}
+
+fail() {
+	log "ERROR: $*" >&2
+	exit 1
+}
+
+if [ "$(id -u)" -ne 0 ]; then
+	fail "backup must run as root"
+fi
+
+umask 077
+mkdir -p "$state_dir" "$cache_dir"
+chmod 700 "$state_dir" "$cache_dir"
+
+exec 9>"$lock_file"
+if ! flock -n 9; then
+	fail "another backup is already running"
+fi
+
+last_success=0
+if [ -f "$status_file" ]; then
+	last_success=$(sed -n 's/^last_success=//p' "$status_file" | tail -n 1)
+	case "$last_success" in
+		'' | *[!0-9]*) last_success=0 ;;
+	esac
+fi
+
+attempt_started=$(date +%s)
+
+write_status() {
+	running=$1
+	success=$2
+	exit_code=$3
+	finished_at=$(date +%s)
+	duration=$((finished_at - attempt_started))
+	tmp_status=$(mktemp "$state_dir/.status.XXXXXX")
+	{
+		printf 'running=%s\n' "$running"
+		printf 'success=%s\n' "$success"
+		printf 'last_exit_code=%s\n' "$exit_code"
+		printf 'last_attempt=%s\n' "$attempt_started"
+		printf 'last_success=%s\n' "$last_success"
+		printf 'duration_seconds=%s\n' "$duration"
+	} >"$tmp_status"
+	chmod 600 "$tmp_status"
+	mv -f "$tmp_status" "$status_file"
+}
+
+on_exit() {
+	exit_code=$?
+	trap - EXIT
+	if [ "$exit_code" -eq 0 ]; then
+		last_success=$(date +%s)
+		write_status 0 1 0
+	else
+		write_status 0 0 "$exit_code"
+	fi
+	exit "$exit_code"
+}
+
+trap on_exit EXIT
+write_status 1 0 0
+
+for required_file in \
+	"$repository_file" \
+	"$password_file" \
+	"$client_pem" \
+	"$paths_file" \
+	"$excludes_file"; do
+	[ -s "$required_file" ] || fail "missing or empty file: $required_file"
+done
+
+if [ -s "$hostname_file" ]; then
+	backup_host=$(sed -n '1p' "$hostname_file")
+else
+	backup_host=$(hostname -s)
+fi
+[ -n "$backup_host" ] || fail "backup hostname is empty"
+
+if [ -n "${HF40_RESTIC_BIN:-}" ]; then
+	restic_bin=$HF40_RESTIC_BIN
+else
+	restic_bin=$(command -v restic || true)
+fi
+[ -x "$restic_bin" ] || fail "restic is not installed"
+
+export RESTIC_REPOSITORY RESTIC_PASSWORD_FILE RESTIC_TLS_CLIENT_CERT RESTIC_CACHE_DIR
+RESTIC_REPOSITORY=$(sed -n '1p' "$repository_file")
+RESTIC_PASSWORD_FILE=$password_file
+RESTIC_TLS_CLIENT_CERT=$client_pem
+RESTIC_CACHE_DIR=$cache_dir
+
+case "$RESTIC_REPOSITORY" in
+	rest:https://*) ;;
+	*) fail "repository must use the HTTPS REST gateway" ;;
+esac
+
+log "verifying repository access for $backup_host"
+"$restic_bin" cat config >/dev/null
+
+log "starting backup"
+"$restic_bin" backup \
+	--host "$backup_host" \
+	--tag automated \
+	--tag linux \
+	--tag "host:$backup_host" \
+	--tag "hf40-restic:$implementation_version" \
+	--files-from "$paths_file" \
+	--exclude-file "$excludes_file" \
+	--exclude-caches \
+	--one-file-system \
+	--retry-lock 15m
+
+log "backup complete"
+"$restic_bin" snapshots \
+	--host "$backup_host" \
+	--tag "hf40-restic:$implementation_version" \
+	--latest 1

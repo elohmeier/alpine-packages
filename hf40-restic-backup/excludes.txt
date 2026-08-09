@@ -1,0 +1,13 @@
+*.log
+*.log.*
+**/__pycache__/**
+**/.cache/**
+**/.Trash/**
+**/.Trash-*/**
+**/node_modules/**
+**/target/**
+**/build/**
+**/dist/**
+**/DerivedData/**
+**/home-assistant_v2.db-wal
+**/home-assistant_v2.db-shm

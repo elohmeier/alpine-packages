@@ -1,0 +1,79 @@
+package:
+  name: hf40-restic-backup
+  version: 0.1.0
+  epoch: 0
+  description: "Root restic backup runtime for hf40 Alpine hosts"
+  copyright:
+    - license: Apache-2.0
+  dependencies:
+    runtime:
+      - busybox
+      - ca-certificates
+      - flock
+      - restic
+  target-architecture:
+    - x86_64
+    - aarch64
+  scriptlets:
+    post-install: |
+      #!/bin/sh
+      rc-update add crond default 2>/dev/null || true
+      rc-service crond status >/dev/null 2>&1 || rc-service crond start 2>/dev/null || true
+      echo "Add repository credentials to /etc/hf40-restic before the first run."
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+
+pipeline:
+  - runs: |
+      install -Dm755 hf40-restic-backup/hf40-restic-backup \
+        "${{targets.destdir}}"/usr/bin/hf40-restic-backup
+      install -Dm755 hf40-restic-backup/hf40-restic-backup.hourly \
+        "${{targets.destdir}}"/etc/periodic/hourly/hf40-restic-backup
+      install -dm700 "${{targets.destdir}}"/etc/hf40-restic
+      install -m600 hf40-restic-backup/backup.paths \
+        "${{targets.destdir}}"/etc/hf40-restic/backup.paths
+      install -m600 hf40-restic-backup/excludes.txt \
+        "${{targets.destdir}}"/etc/hf40-restic/excludes.txt
+      install -dm700 "${{targets.destdir}}"/var/cache/hf40-restic
+      install -dm700 "${{targets.destdir}}"/var/lib/hf40-restic
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+        - flock
+        - restic
+  pipeline:
+    - name: "Verify installed files"
+      runs: |
+        test -x /usr/bin/hf40-restic-backup
+        test -x /etc/periodic/hourly/hf40-restic-backup
+        grep -Fq 'exec /usr/bin/hf40-restic-backup' \
+          /etc/periodic/hourly/hf40-restic-backup
+        grep -Fq 'exec /usr/local/sbin/hf40-restic-backup' \
+          /etc/periodic/hourly/hf40-restic-backup
+        test "$(stat -c '%a' /etc/hf40-restic)" = 700
+        test "$(stat -c '%a' /etc/hf40-restic/backup.paths)" = 600
+        test "$(stat -c '%a' /etc/hf40-restic/excludes.txt)" = 600
+    - name: "Check shell syntax and safe unconfigured failure"
+      runs: |
+        sh -n /usr/bin/hf40-restic-backup
+        sh -n /etc/periodic/hourly/hf40-restic-backup
+        if /usr/bin/hf40-restic-backup 2>/dev/null; then
+          echo "unconfigured backup unexpectedly succeeded" >&2
+          exit 1
+        fi

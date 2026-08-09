@@ -24,7 +24,7 @@ apk update
 | Package                      | Description                                                                               | Architectures   |
 | ---------------------------- | ----------------------------------------------------------------------------------------- | --------------- |
 | **adaptive-lighting**        | Home Assistant custom integration for adaptive lighting                                   | x86_64, aarch64 |
-| **homematicip-local**        | Local Homematic and Homematic IP integration for Home Assistant                            | x86_64, aarch64 |
+| **homematicip-local**        | Local Homematic and Homematic IP integration for Home Assistant                           | x86_64, aarch64 |
 | **home-assistant-container** | Home Assistant Core - Podman container                                                    | x86_64, aarch64 |
 | **home-assistant-watch**     | Watchdog: restart Home Assistant if its recorder stops writing                            | x86_64, aarch64 |
 | **certificate-sync**         | Synchronize cert-manager certificates to multiple infrastructure appliances               | x86_64, aarch64 |
@@ -64,15 +64,16 @@ apk update
 
 ### Utilities
 
-| Package        | Description                          | Architectures   |
-| -------------- | ------------------------------------ | --------------- |
-| **ssh-to-age** | Convert SSH Ed25519 keys to age keys | x86_64, aarch64 |
+| Package                | Description                                       | Architectures   |
+| ---------------------- | ------------------------------------------------- | --------------- |
+| **ssh-to-age**         | Convert SSH Ed25519 keys to age keys              | x86_64, aarch64 |
+| **hf40-restic-backup** | Root restic backup runtime and six-hour scheduler | x86_64, aarch64 |
 
 ### AI / Developer Tools
 
-| Package    | Description                                        | Architectures   |
-| ---------- | -------------------------------------------------- | --------------- |
-| **codex**  | OpenAI Codex CLI - coding agent for the terminal   | x86_64, aarch64 |
+| Package   | Description                                      | Architectures   |
+| --------- | ------------------------------------------------ | --------------- |
+| **codex** | OpenAI Codex CLI - coding agent for the terminal | x86_64, aarch64 |
 
 ### Observability
 
