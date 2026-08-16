@@ -3,6 +3,14 @@
 # FTP Server Settings
 FTP_PAPERLESS_BRIDGE_LISTEN="0.0.0.0:2121"
 FTP_PAPERLESS_BRIDGE_PASSIVE_MODE_PORTS="2122-2124"
+
+# SFTP Server Settings (optional)
+# Create the key with: ssh-keygen -t ed25519 -N '' -f /etc/ftp-paperless-bridge/ssh_host_ed25519_key
+# Ensure the paperless service user can read it.
+#FTP_PAPERLESS_BRIDGE_SFTP_LISTEN="0.0.0.0:2222"
+#FTP_PAPERLESS_BRIDGE_SFTP_HOST_KEY="/etc/ftp-paperless-bridge/ssh_host_ed25519_key"
+
+# Shared FTP/SFTP credentials
 FTP_PAPERLESS_BRIDGE_USERNAME="scanner"
 FTP_PAPERLESS_BRIDGE_PASSWORD="changeme"
 

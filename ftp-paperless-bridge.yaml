@@ -1,8 +1,8 @@
 package:
   name: ftp-paperless-bridge
-  version: "0.3.3"
+  version: "0.4.0"
   epoch: 0
-  description: "FTP server bridge for network document scanners to paperless-ngx"
+  description: "FTP/SFTP server bridge for network document scanners to paperless-ngx"
   copyright:
     - license: Apache-2.0
   dependencies:
@@ -30,12 +30,14 @@ package:
       echo "     - Set FTP_PAPERLESS_BRIDGE_PAPERLESS_URL"
       echo "     - Set FTP_PAPERLESS_BRIDGE_PAPERLESS_API_TOKEN"
       echo "     - Change FTP_PAPERLESS_BRIDGE_PASSWORD"
+      echo "     - Enable FTP and/or SFTP listeners"
       echo "  2. rc-service ftp-paperless-bridge start"
       echo "  3. rc-update add ftp-paperless-bridge default"
       echo ""
       echo "Ports:"
       echo "  2121       FTP server"
       echo "  2122-2124  FTP passive mode"
+      echo "  2222       SFTP server (when enabled)"
       echo ""
       echo "Logs:"
       echo "  /var/log/ftp-paperless-bridge.log"
@@ -68,7 +70,7 @@ pipeline:
     with:
       repository: https://github.com/elohmeier/ftp-paperless-bridge.git
       branch: main
-      expected-commit: b3d9fd7e5e9095a7139a8ba85cb9571465641290
+      expected-commit: fae5a874d1125f164c0bebf85ea19a1bc925a467
 
   - runs: |
       cargo fetch --locked
@@ -100,13 +102,16 @@ test:
         - openrc
   pipeline:
     - runs: |
-        ftp-paperless-bridge --version
+        ftp-paperless-bridge --version | grep -q '${{package.version}}'
         ftp-paperless-bridge --help
     - runs: |
         test -x /etc/init.d/ftp-paperless-bridge
         test -x /sbin/openrc-run
         grep -q '^supervisor=supervise-daemon$' /etc/init.d/ftp-paperless-bridge
         grep -q -- '--respawn-delay 10 --respawn-max 0' /etc/init.d/ftp-paperless-bridge
+        grep -q 'FTP_PAPERLESS_BRIDGE_SFTP_LISTEN' /etc/init.d/ftp-paperless-bridge
+        grep -q 'FTP_PAPERLESS_BRIDGE_SFTP_LISTEN' /etc/conf.d/ftp-paperless-bridge
+        grep -q 'FTP_PAPERLESS_BRIDGE_SFTP_HOST_KEY' /etc/conf.d/ftp-paperless-bridge
         if grep -q '^command_background=' /etc/init.d/ftp-paperless-bridge; then
           exit 1
         fi

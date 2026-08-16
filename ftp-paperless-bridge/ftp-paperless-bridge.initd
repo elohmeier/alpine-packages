@@ -1,7 +1,7 @@
 #!/sbin/openrc-run
 
 name="ftp-paperless-bridge"
-description="FTP to Paperless-ngx bridge service"
+description="FTP/SFTP to Paperless-ngx bridge service"
 command="/usr/bin/ftp-paperless-bridge"
 command_user="paperless:paperless"
 supervisor=supervise-daemon
@@ -23,8 +23,18 @@ depend() {
 start_pre() {
 	checkpath -f -o "$command_user" "$output_log"
 
-	if [ -z "$FTP_PAPERLESS_BRIDGE_LISTEN" ]; then
-		eerror "FTP_PAPERLESS_BRIDGE_LISTEN not set in /etc/conf.d/$RC_SVCNAME"
+	if [ -z "$FTP_PAPERLESS_BRIDGE_LISTEN" ] && [ -z "$FTP_PAPERLESS_BRIDGE_SFTP_LISTEN" ]; then
+		eerror "Set FTP_PAPERLESS_BRIDGE_LISTEN and/or FTP_PAPERLESS_BRIDGE_SFTP_LISTEN in /etc/conf.d/$RC_SVCNAME"
+		return 1
+	fi
+
+	if [ -n "$FTP_PAPERLESS_BRIDGE_LISTEN" ] && [ -z "$FTP_PAPERLESS_BRIDGE_PASSIVE_MODE_PORTS" ]; then
+		eerror "FTP_PAPERLESS_BRIDGE_PASSIVE_MODE_PORTS is required when FTP is enabled"
+		return 1
+	fi
+
+	if [ -n "$FTP_PAPERLESS_BRIDGE_SFTP_LISTEN" ] && [ -z "$FTP_PAPERLESS_BRIDGE_SFTP_HOST_KEY" ]; then
+		eerror "FTP_PAPERLESS_BRIDGE_SFTP_HOST_KEY is required when SFTP is enabled"
 		return 1
 	fi
 
