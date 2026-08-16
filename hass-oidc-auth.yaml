@@ -1,0 +1,67 @@
+package:
+  name: hass-oidc-auth
+  version: "1.1.1"
+  epoch: 0
+  description: "Home Assistant custom integration for OpenID Connect authentication"
+  copyright:
+    - license: MIT
+  dependencies:
+    runtime:
+      - busybox-binsh
+  target-architecture:
+    - x86_64
+    - aarch64
+  scriptlets:
+    post-install: |
+      #!/bin/sh
+      chown -R homeassistant:homeassistant /var/lib/homeassistant/custom_components/auth_oidc 2>/dev/null || true
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/christiaangoossens/hass-oidc-auth.git
+      tag: v${{package.version}}
+      expected-commit: 5add4f98a1176bf580e76413a05c07cdfc095eeb
+
+  - runs: |
+      install -dm755 "${{targets.destdir}}/var/lib/homeassistant/custom_components"
+      cp -r custom_components/auth_oidc \
+        "${{targets.destdir}}/var/lib/homeassistant/custom_components/"
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+        - python3
+  pipeline:
+    - runs: |
+        # Test that the custom component files exist
+        test -d /var/lib/homeassistant/custom_components/auth_oidc
+        test -f /var/lib/homeassistant/custom_components/auth_oidc/__init__.py
+        test -f /var/lib/homeassistant/custom_components/auth_oidc/manifest.json
+    - runs: |
+        # Verify manifest.json is valid JSON and contains expected fields
+        python3 -c "
+        import json
+        with open('/var/lib/homeassistant/custom_components/auth_oidc/manifest.json') as f:
+            m = json.load(f)
+            assert m['domain'] == 'auth_oidc', 'Wrong domain'
+            assert m['version'] == '${{package.version}}', 'Version mismatch'
+            print(f\"OIDC Auth v{m['version']} installed successfully\")
+        "
