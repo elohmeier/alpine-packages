@@ -50,12 +50,6 @@ apk update
 | ------------- | ------------------------------- | ---------------------- |
 | **prusalink** | PrusaLink for Prusa 3D printers | x86_64, aarch64, armhf |
 
-### Languages
-
-| Package       | Description                                                            | Architectures   |
-| ------------- | ---------------------------------------------------------------------- | --------------- |
-| **python314** | Python 3.14 - High-level scripting language with PGO/LTO optimizations | x86_64, aarch64 |
-
 ### Document Management
 
 | Package                  | Description                                                      | Architectures   |
@@ -74,11 +68,6 @@ apk update
 | Package   | Description                                      | Architectures   |
 | --------- | ------------------------------------------------ | --------------- |
 | **codex** | OpenAI Codex CLI - coding agent for the terminal | x86_64, aarch64 |
-
-### Observability
-
-| Package    | Description                                                                | Architectures   |
-| ---------- | -------------------------------------------------------------------------- | --------------- |
 
 ## Package Details
 
@@ -328,18 +317,6 @@ rc-update add zwave-js-ui default
 
 Configure Home Assistant Z-Wave JS integration to connect to `ws://HOST:3000`.
 
-### python314
-
-Python 3.14 with PGO (Profile-Guided Optimization) and LTO (Link-Time Optimization). Built for musl libc with zstd compression support.
-
-```sh
-apk add python314
-```
-
-- **Binary:** `/usr/bin/python3.14`
-- **Features:** PGO, LTO, zstd compression (stdlib), shared library
-- **Note:** Available for projects requiring Python 3.14
-
 ### ftp-paperless-bridge
 
 FTP server that accepts scanned documents from network-enabled scanners and forwards them to paperless-ngx.
@@ -357,20 +334,6 @@ rc-update add ftp-paperless-bridge default
 - **Required settings:** `FTP_PAPERLESS_BRIDGE_PAPERLESS_URL`, `FTP_PAPERLESS_BRIDGE_PAPERLESS_API_TOKEN`, change default `FTP_PAPERLESS_BRIDGE_PASSWORD`
 
 Point your scanner's FTP upload to `<host>:2121` with the configured credentials.
-
-### vector
-
-High-performance observability data pipeline for collecting, transforming, and routing logs, metrics, and traces.
-
-```sh
-apk add vector
-rc-service vector start
-rc-update add vector default
-```
-
-- **Config:** `/etc/vector/vector.yaml`
-- **Data:** `/var/lib/vector`
-- **Service config:** `/etc/conf.d/vector`
 
 ## Building Locally
 
