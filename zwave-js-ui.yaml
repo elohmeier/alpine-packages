@@ -1,7 +1,7 @@
 package:
   name: zwave-js-ui
   version: 11.22.0
-  epoch: 0
+  epoch: 1
   description: "Z-Wave JS UI - Full-featured Z-Wave Control Panel and MQTT Gateway"
   copyright:
     - license: MIT
@@ -53,8 +53,8 @@ package:
 environment:
   contents:
     repositories:
-      - https://dl-cdn.alpinelinux.org/alpine/edge/main
-      - https://dl-cdn.alpinelinux.org/alpine/edge/community
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
     keyring:
       - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
     packages:
@@ -147,8 +147,8 @@ test:
   environment:
     contents:
       repositories:
-        - https://dl-cdn.alpinelinux.org/alpine/edge/main
-        - https://dl-cdn.alpinelinux.org/alpine/edge/community
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
       keyring:
         - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
   pipeline:

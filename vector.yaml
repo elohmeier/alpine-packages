@@ -35,8 +35,8 @@ package:
 environment:
   contents:
     repositories:
-      - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
-      - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
     keyring:
       - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
     packages:
@@ -64,7 +64,7 @@ pipeline:
     with:
       repository: https://github.com/vectordotdev/vector.git
       tag: v${{package.version}}
-      expected-commit: 365b7c374338c591bda78dabe933924913f9f120
+      expected-commit: 8832452f57afb536ea0de53a093f9fd1b669ccec
 
   - runs: |
       # Patch Cargo.toml to use system rdkafka with dynamic linking and system gssapi
@@ -106,8 +106,8 @@ test:
   environment:
     contents:
       repositories:
-        - https://dl-cdn.alpinelinux.org/alpine/v3.23/main
-        - https://dl-cdn.alpinelinux.org/alpine/v3.23/community
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
       keyring:
         - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
       packages:

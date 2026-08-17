@@ -1,7 +1,7 @@
 package:
   name: chip-sdk
   version: 2025.7.0
-  epoch: 1
+  epoch: 2
   description: "Matter/CHIP SDK Python bindings for Home Assistant"
   copyright:
     - license: Apache-2.0
@@ -31,8 +31,8 @@ package:
 environment:
   contents:
     repositories:
-      - https://dl-cdn.alpinelinux.org/alpine/edge/main
-      - https://dl-cdn.alpinelinux.org/alpine/edge/community
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
     keyring:
       - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
     packages:
@@ -195,8 +195,8 @@ test:
   environment:
     contents:
       repositories:
-        - https://dl-cdn.alpinelinux.org/alpine/edge/main
-        - https://dl-cdn.alpinelinux.org/alpine/edge/community
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
       keyring:
         - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
   pipeline:
