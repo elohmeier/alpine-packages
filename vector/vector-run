@@ -1,0 +1,17 @@
+#!/bin/sh
+# Vector run wrapper.
+#
+# OpenRC's supervise-daemon drops privileges (command_user) before exec'ing the
+# daemon, which strips the environment Vector needs to interpolate ${VECTOR_*}
+# in its config (secrets, VECTOR_CONFIG). Load the runtime env *here*, after the
+# drop, so it reaches Vector regardless. Mirrors the macOS hf40-vector-run.sh.
+#
+# Put runtime settings (root-only, 0600) in /etc/vector/vector.env, e.g.:
+#   VECTOR_CONFIG=/etc/vector/vector.yaml
+#   VECTOR_LOGS_URL=https://.../insert/jsonline?...
+#   VECTOR_LOGS_USERNAME=...
+#   VECTOR_LOGS_PASSWORD=...
+set -a
+[ -r /etc/vector/vector.env ] && . /etc/vector/vector.env
+set +a
+exec /usr/bin/vector --config "${VECTOR_CONFIG:-/etc/vector/vector.yaml}" "$@"

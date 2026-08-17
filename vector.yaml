@@ -1,6 +1,6 @@
 package:
   name: vector
-  version: "0.55.0"
+  version: "0.57.0"
   epoch: 0
   description: "High-performance observability data pipeline"
   copyright:
@@ -20,6 +20,13 @@ package:
       addgroup -S vector 2>/dev/null
       adduser -S -D -h /var/lib/vector -s /sbin/nologin -G vector -g vector vector 2>/dev/null
       adduser vector adm 2>/dev/null
+      exit 0
+    post-upgrade: |
+      #!/bin/sh
+      # Pick up initd/wrapper fixes automatically on upgrade.
+      if rc-service vector status >/dev/null 2>&1; then
+        rc-service vector restart
+      fi
       exit 0
   checks:
     disabled:
@@ -57,7 +64,7 @@ pipeline:
     with:
       repository: https://github.com/vectordotdev/vector.git
       tag: v${{package.version}}
-      expected-commit: cf8de830c6060629092397fd2334fc0f0219363a
+      expected-commit: 365b7c374338c591bda78dabe933924913f9f120
 
   - runs: |
       # Patch Cargo.toml to use system rdkafka with dynamic linking and system gssapi
@@ -84,9 +91,11 @@ pipeline:
       # Install logrotate config
       install -Dm644 vector/logrotate "${{targets.destdir}}"/etc/logrotate.d/vector
 
-      # Install OpenRC files
+      # Install OpenRC files + the run wrapper (loads /etc/vector/vector.env
+      # after the privilege drop; see vector/vector-run)
       install -Dm755 vector/vector.initd "${{targets.destdir}}"/etc/init.d/vector
       install -Dm644 vector/vector.confd "${{targets.destdir}}"/etc/conf.d/vector
+      install -Dm755 vector/vector-run "${{targets.destdir}}"/usr/libexec/vector/vector-run
 
       # Create data directory
       install -dm755 "${{targets.destdir}}"/var/lib/vector
@@ -111,3 +120,13 @@ test:
     - runs: |
         vector --version
         vector --help
+    - runs: |
+        # Regression guards for the OpenRC integration (see vector/vector-run).
+        test -x /usr/libexec/vector/vector-run
+        test -x /etc/init.d/vector
+        # wrapper must default to the yaml config, not vector's toml default
+        grep -q 'VECTOR_CONFIG:-/etc/vector/vector.yaml' /usr/libexec/vector/vector-run
+        # start_pre must not validate a hardcoded .toml that a yaml install lacks
+        ! grep -q 'validate /etc/vector/vector.toml' /etc/init.d/vector
+        # the wrapper sources the runtime env after the privilege drop
+        grep -q '/etc/vector/vector.env' /usr/libexec/vector/vector-run
