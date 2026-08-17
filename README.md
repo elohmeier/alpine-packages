@@ -79,7 +79,6 @@ apk update
 
 | Package    | Description                                                                | Architectures   |
 | ---------- | -------------------------------------------------------------------------- | --------------- |
-| **vector** | High-performance observability data pipeline for logs, metrics, and traces | x86_64, aarch64 |
 
 ## Package Details
 
