@@ -27,6 +27,10 @@ start_pre() {
 	# Ensure PAA root cert directory exists
 	checkpath --directory --owner "$command_user" /var/lib/matter-server/paa-root-certs
 
+	# Keep OTA downloads and provider state in the writable Matter data tree.
+	# Without an explicit path, Matter Server resolves "updates" against /.
+	checkpath --directory --owner "$command_user" "${MATTER_OTA_DIR:-/var/lib/matter-server/updates}"
+
 	# Ensure CHIP SDK storage directory has correct ownership
 	# (created by chip-sdk package but needs to be writable by matter user)
 	checkpath --directory --owner "$command_user" /var/lib/chip

@@ -1,7 +1,7 @@
 package:
   name: chip-sdk
   version: 2025.7.0
-  epoch: 2
+  epoch: 3
   description: "Matter/CHIP SDK Python bindings for Home Assistant"
   copyright:
     - license: Apache-2.0
@@ -130,6 +130,19 @@ pipeline:
       python3 -m pip install --break-system-packages \
         -r scripts/setup/requirements.build.txt
 
+  # Build the external OTA provider required by python-matter-server
+  - runs: |
+      cd chip-wheels/connectedhomeip
+
+      export PW_PROJECT_ROOT="$(pwd)"
+      export PW_ROOT="$(pwd)/third_party/pigweed/repo"
+
+      gn gen --check --fail-on-unused-args \
+        --root=examples/ota-provider-app/linux \
+        out/ota-provider \
+        --args='custom_toolchain="//third_party/connectedhomeip/build/toolchain/custom" target_cc="ccache gcc" target_cxx="ccache g++" target_ar="ar" chip_config_network_layer_ble=false chip_crypto="openssl" chip_mdns="minimal" chip_minmdns_default_policy="libnl"'
+      ninja -C out/ota-provider
+
   # Build Python wheels
   - runs: |
       cd chip-wheels/connectedhomeip
@@ -191,6 +204,11 @@ pipeline:
       # Paths are compiled in: /var/lib/chip/{chip_factory.ini,chip_config.ini,chip_counters.ini,chip_kvs}
       install -dm755 "${{targets.destdir}}"/var/lib/chip
 
+      # Matter Server launches this executable for device firmware updates.
+      install -Dm755 \
+        chip-wheels/connectedhomeip/out/ota-provider/chip-ota-provider-app \
+        "${{targets.destdir}}"/usr/bin/chip-ota-provider-app
+
 test:
   environment:
     contents:
@@ -207,3 +225,7 @@ test:
     - runs: |
         # Test that the native .so library exists
         find /usr/lib -name "_ChipDeviceCtrl*.so" | grep -q . && echo "native library OK"
+    - runs: |
+        # Test that Matter Server's external OTA provider is packaged.
+        command -v chip-ota-provider-app
+        chip-ota-provider-app --help

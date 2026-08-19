@@ -1,7 +1,7 @@
 package:
   name: matter-server
   version: 8.1.2
-  epoch: 17
+  epoch: 19
   description: "Open Home Foundation Matter Server - WebSocket-based Matter controller"
   copyright:
     - license: Apache-2.0
@@ -10,7 +10,7 @@ package:
     no-depends: true
   dependencies:
     runtime:
-      - chip-sdk
+      - chip-sdk>=2025.7.0-r3
       - python3
       - py3-aiohttp
       - py3-coloredlogs
@@ -76,7 +76,8 @@ environment:
       - py3-pip
       - py3-setuptools
       - py3-wheel
-      - chip-sdk
+      - patch
+      - chip-sdk>=2025.7.0-r3
       # System packages for dependencies (not bundled)
       - py3-aiohttp
       - py3-coloredlogs
@@ -131,6 +132,11 @@ pipeline:
           "$whl"
       done
 
+      # A device may reboot before its OTA UpdateState subscription reports the
+      # final Idle transition. Treat the confirmed software-version change as
+      # successful completion so the ephemeral provider is always cleaned up.
+      patch -p1 -d "$sitepkgs" < matter-server/complete-ota-on-version-change.patch
+
       # Byte-compile Python files
       python3 -m compileall -q "$sitepkgs" || true
 
@@ -169,3 +175,37 @@ test:
     - runs: |
         # Test help output
         matter-server --help
+    - runs: |
+        # A software-version change must finish OTA even if the device rebooted
+        # before reporting its final UpdateState=Idle transition.
+        python3 - <<'PY'
+        import asyncio
+        from pathlib import Path
+
+        from matter_server.server.ota.provider import (
+            BASIC_INFORMATION_SOFTWARE_VERSION_ATTRIBUTE_PATH,
+            ExternalOtaProvider,
+        )
+
+        async def main() -> None:
+            provider = ExternalOtaProvider(0x134B, Path("/tmp"), Path("/tmp/ota"))
+            provider._ota_target_node_id = 51
+            await provider.check_update_state(
+                BASIC_INFORMATION_SOFTWARE_VERSION_ATTRIBUTE_PATH,
+                16842752,
+                16908288,
+            )
+            assert provider._ota_done.done()
+            assert provider._ota_done.result() is None
+
+        asyncio.run(main())
+        PY
+    - runs: |
+        # OTA state must use the service's writable persistent data tree.
+        . /etc/conf.d/matter-server
+        test "$MATTER_OTA_DIR" = "/var/lib/matter-server/updates"
+        case " $MATTER_SERVER_OPTS " in
+          *" --ota-provider-dir $MATTER_OTA_DIR "*) ;;
+          *) exit 1 ;;
+        esac
+        command -v chip-ota-provider-app

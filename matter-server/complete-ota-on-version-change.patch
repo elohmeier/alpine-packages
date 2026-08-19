@@ -1,0 +1,40 @@
+--- a/matter_server/server/ota/provider.py
++++ b/matter_server/server/ota/provider.py
+@@ -40,0 +41,6 @@ OTA_SOFTWARE_UPDATE_REQUESTOR_UPDATE_STATE_ATTRIBUTE_PATH = (
++BASIC_INFORMATION_SOFTWARE_VERSION_ATTRIBUTE_PATH = (
++    create_attribute_path_from_attribute(
++        0, Clusters.BasicInformation.Attributes.SoftwareVersion
++    )
++)
++
+@@ -359,3 +365,4 @@ class ExternalOtaProvider:
+-            self._ota_done.set_exception(
+-                UpdateError("Device went offline during OTA update")
+-            )
++            if not self._ota_done.done():
++                self._ota_done.set_exception(
++                    UpdateError("Device went offline during OTA update")
++                )
+@@ -364 +371,17 @@ class ExternalOtaProvider:
+-        if str(path) != OTA_SOFTWARE_UPDATE_REQUESTOR_UPDATE_STATE_ATTRIBUTE_PATH:
++        path_str = str(path)
++
++        # Some devices reboot after applying the image before their update-state
++        # subscription can report the final Idle transition. A changed software
++        # version is equally conclusive evidence that the OTA update succeeded.
++        if path_str == BASIC_INFORMATION_SOFTWARE_VERSION_ATTRIBUTE_PATH:
++            if old_value != new_value and not self._ota_done.done():
++                LOGGER.info(
++                    "Node %d software version changed from %r to %r, assuming done.",
++                    self._ota_target_node_id,
++                    old_value,
++                    new_value,
++                )
++                self._ota_done.set_result(None)
++            return
++
++        if path_str != OTA_SOFTWARE_UPDATE_REQUESTOR_UPDATE_STATE_ATTRIBUTE_PATH:
+@@ -379,0 +403,3 @@ class ExternalOtaProvider:
++            if self._ota_done.done():
++                return
++
