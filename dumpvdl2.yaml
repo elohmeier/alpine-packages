@@ -1,0 +1,81 @@
+package:
+  name: dumpvdl2
+  version: "2.7.0"
+  epoch: 0
+  description: "VDL Mode 2 message decoder and protocol analyzer"
+  copyright:
+    - license: GPL-3.0-or-later
+  dependencies:
+    runtime:
+      - libacars
+  target-architecture:
+    - x86_64
+    - aarch64
+  checks:
+    disabled:
+      - usrmerge
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+      - build-base
+      - ca-certificates
+      - cmake
+      - glib-dev
+      - libacars
+      - libacars-dev
+      - librtlsdr-dev
+      - ninja
+      - pkgconf
+      - sqlite-dev
+      - zeromq-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/szpajder/dumpvdl2.git
+      tag: v${{package.version}}
+      expected-commit: 686e87f2294ef6275855ba7364bd4bb9a0f8f56a
+
+  - runs: |
+      cmake -B build -G Ninja \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DRTLSDR=ON \
+        -DMIRISDR=OFF \
+        -DSDRPLAY=OFF \
+        -DSDRPLAY3=OFF \
+        -DSOAPYSDR=OFF \
+        -DETSY_STATSD=OFF \
+        -DSQLITE=ON \
+        -DZMQ=ON \
+        -DRAW_BINARY_FORMAT=OFF \
+        -DPROFILING=OFF
+      cmake --build build
+      DESTDIR="${{targets.destdir}}" cmake --install build
+
+  - uses: strip
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+  pipeline:
+    - runs: dumpvdl2 --version 2>&1 | grep -F "dumpvdl2 ${{package.version}}"
+    - runs: |
+        help=$(dumpvdl2 --help 2>&1)
+        printf '%s\n' "$help" | grep -F -- "--rtlsdr"
+        printf '%s\n' "$help" | grep -F -- "--bs-db"
+        dumpvdl2 --output help 2>&1 | grep -F "Output to a ZeroMQ publisher socket"

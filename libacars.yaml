@@ -1,0 +1,85 @@
+package:
+  name: libacars
+  version: "2.2.1"
+  epoch: 0
+  description: "Library for decoding ACARS message payloads"
+  copyright:
+    - license: MIT
+  target-architecture:
+    - x86_64
+    - aarch64
+  checks:
+    disabled:
+      - usrmerge
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+      - build-base
+      - ca-certificates
+      - cmake
+      - jansson-dev
+      - libxml2-dev
+      - ninja
+      - zlib-dev
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/szpajder/libacars.git
+      tag: v${{package.version}}
+      expected-commit: 9af09a0121d4ec577339cbd4c7420d7519da48fa
+
+  - runs: |
+      cmake -B build -G Ninja \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_INSTALL_LIBDIR=lib \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DZLIB=ON \
+        -DLIBXML2=ON \
+        -DJANSSON=ON
+      cmake --build build
+      DESTDIR="${{targets.destdir}}" cmake --install build
+
+  - uses: strip
+
+subpackages:
+  - name: libacars-dev
+    description: "Development files for libacars"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - libacars=${{package.full-version}}
+    test:
+      environment:
+        contents:
+          repositories:
+            - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+            - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+          keyring:
+            - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+          packages:
+            - busybox
+            - pkgconf
+      pipeline:
+        - runs: pkg-config --modversion libacars-2 | grep -Fx "${{package.version}}"
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+  pipeline:
+    - runs: test -e /usr/lib/libacars-2.so.2

@@ -1,0 +1,88 @@
+package:
+  name: multimon-ng
+  version: "1.6.0"
+  epoch: 0
+  description: "Digital radio transmission decoder"
+  copyright:
+    - license: GPL-2.0-or-later
+  target-architecture:
+    - x86_64
+    - aarch64
+  checks:
+    disabled:
+      - usrmerge
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+      - build-base
+      - ca-certificates
+      - cmake
+      - ninja
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/EliasOenal/multimon-ng.git
+      tag: ${{package.version}}
+      expected-commit: de0585926542687155852db502a9d2861e9acf95
+
+  - runs: |
+      cmake -B build -G Ninja \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DX11_SUPPORT=OFF \
+        -DPULSE_AUDIO_SUPPORT=OFF \
+        -DSDL3_SCOPE=OFF \
+        -DBUILD_GEN_NG=ON
+      cmake --build build
+      DESTDIR="${{targets.destdir}}" cmake --install build
+      install -Dm644 gen-ng.1 "${{targets.destdir}}"/usr/share/man/man1/gen-ng.1
+
+  - uses: strip
+
+subpackages:
+  - name: multimon-ng-tools
+    description: "Signal-generation tools for multimon-ng"
+    pipeline:
+      - runs: |
+          install -dm755 "${{targets.subpkgdir}}"/usr/bin
+          mv "${{targets.destdir}}"/usr/bin/gen-ng "${{targets.subpkgdir}}"/usr/bin/
+          install -dm755 "${{targets.subpkgdir}}"/usr/share/man/man1
+          mv "${{targets.destdir}}"/usr/share/man/man1/gen-ng.1 \
+            "${{targets.subpkgdir}}"/usr/share/man/man1/
+    test:
+      environment:
+        contents:
+          repositories:
+            - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+            - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+          keyring:
+            - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+          packages:
+            - busybox
+      pipeline:
+        - runs: |
+            help=$(gen-ng -h 2>&1 || true)
+            printf '%s\n' "$help" | grep -F "Generates test signals"
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+  pipeline:
+    - runs: |
+        help=$(multimon-ng -h 2>&1 || true)
+        printf '%s\n' "$help" | grep -F "Usage:"

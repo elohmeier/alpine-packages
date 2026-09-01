@@ -1,0 +1,76 @@
+package:
+  name: ais-catcher
+  version: "0.70"
+  epoch: 0
+  description: "Multi-platform AIS receiver"
+  copyright:
+    - license: GPL-3.0-or-later
+  target-architecture:
+    - x86_64
+    - aarch64
+  checks:
+    disabled:
+      - usrmerge
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+      - build-base
+      - ca-certificates
+      - cmake
+      - librtlsdr-dev
+      - libusb-dev
+      - ninja
+      - pkgconf
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/jvde-github/AIS-catcher.git
+      tag: v${{package.version}}
+      expected-commit: 8833c64b3da0c42e9a724b9bd13eaab2fffadcca
+
+  - runs: |
+      cmake -B build -G Ninja \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DRTLSDR=ON \
+        -DRTLSDR_STATIC=OFF \
+        -DSOAPYSDR=OFF \
+        -DAIRSPY=OFF \
+        -DSDRPLAY=OFF \
+        -DAIRSPYHF=OFF \
+        -DHACKRF=OFF \
+        -DHYDRASDR=OFF \
+        -DSOXR=OFF \
+        -DZLIB=OFF \
+        -DSAMPLERATE=OFF \
+        -DZMQ=OFF \
+        -DPSQL=OFF \
+        -DSQLITE=OFF \
+        -DOPENSSL=OFF \
+        -DNMEA2000=OFF \
+        -DWEBVIEWER=OFF
+      cmake --build build
+      DESTDIR="${{targets.destdir}}" cmake --install build
+
+  - uses: strip
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+  pipeline:
+    - runs: AIS-catcher -h BUILD | grep -F "${{package.version}}"

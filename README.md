@@ -58,10 +58,17 @@ apk update
 
 ### Utilities
 
-| Package                | Description                                       | Architectures   |
-| ---------------------- | ------------------------------------------------- | --------------- |
-| **ssh-to-age**         | Convert SSH Ed25519 keys to age keys              | x86_64, aarch64 |
-| **hf40-restic-backup** | Root restic backup runtime and six-hour scheduler | x86_64, aarch64 |
+| Package                | Description                                              | Architectures   |
+| ---------------------- | -------------------------------------------------------- | --------------- |
+| **ais-catcher**        | AIS receiver with RTL-SDR support                        | x86_64, aarch64 |
+| **dumpvdl2**           | VDL Mode 2 decoder with RTL-SDR, SQLite, and ZeroMQ      | x86_64, aarch64 |
+| **hf40-restic-backup** | Root restic backup runtime and six-hour scheduler        | x86_64, aarch64 |
+| **libacars**           | ACARS message decoding library                           | x86_64, aarch64 |
+| **libacars-dev**       | Development headers and pkg-config metadata for libacars | x86_64, aarch64 |
+| **multimon-ng**        | Digital radio transmission decoder                       | x86_64, aarch64 |
+| **multimon-ng-tools**  | Signal generators for multimon-ng                        | x86_64, aarch64 |
+| **ssh-to-age**         | Convert SSH Ed25519 keys to age keys                     | x86_64, aarch64 |
+| **welle-cli**          | Command-line DAB/DAB+ receiver using bundled Kiss FFT    | x86_64, aarch64 |
 
 ### AI / Developer Tools
 

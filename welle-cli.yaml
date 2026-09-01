@@ -1,0 +1,73 @@
+package:
+  name: welle-cli
+  version: "2.7"
+  epoch: 0
+  description: "Command-line DAB/DAB+ software-defined radio receiver"
+  copyright:
+    - license: GPL-2.0-or-later
+  target-architecture:
+    - x86_64
+    - aarch64
+  checks:
+    disabled:
+      - usrmerge
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - alsa-lib-dev
+      - build-base
+      - busybox
+      - ca-certificates
+      - cmake
+      - faad2-dev
+      - lame-dev
+      - librtlsdr-dev
+      - mpg123-dev
+      - ninja
+      - pkgconf
+      - xxd
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/AlbrechtL/welle.io.git
+      tag: v${{package.version}}
+      expected-commit: 512558d1f8ac4c524d3c63e97510ea36c1bd7a70
+
+  - runs: |
+      cmake -B build -G Ninja \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_INSTALL_LIBDIR=lib \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+        -DCMAKE_EXE_LINKER_FLAGS=-Wl,-z,stack-size=512000 \
+        -DBUILD_WELLE_IO=OFF \
+        -DBUILD_WELLE_CLI=ON \
+        -DKISS_FFT=ON \
+        -DRTLSDR=ON \
+        -DAIRSPY=OFF \
+        -DSOAPYSDR=OFF \
+        -DFLAC=OFF
+      cmake --build build
+      DESTDIR="${{targets.destdir}}" cmake --install build
+
+  - uses: strip
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+  pipeline:
+    - runs: welle-cli -v 2>&1 | grep -F "welle-cli v${{package.version}}"

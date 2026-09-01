@@ -182,6 +182,8 @@ jobs:
         with:
           version: latest-release
 
+      - uses: astral-sh/setup-uv@v7
+
       - name: Setup signing key
         run: |
           echo "${{ secrets.ABUILD_PRIVKEY }}" > melange.pem
@@ -203,8 +205,25 @@ jobs:
         run: |
           mkdir -p _site
 
-          # Build list of valid package names from existing .yaml files
-          valid_packages=$(ls -1 *.yaml 2>/dev/null | sed 's/\.yaml$//' | sort -u)
+          # Build list of valid main and subpackage names from package definitions.
+          # Keeping subpackages here prevents an unrelated build from dropping
+          # packages such as libacars-dev from the published repository.
+          valid_packages=$(uv run python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          names = set()
+          for path in Path(".").glob("*.yaml"):
+              data = yaml.safe_load(path.read_text())
+              package = data.get("package", {})
+              if package.get("name"):
+                  names.add(package["name"])
+              for subpackage in data.get("subpackages", []):
+                  if subpackage.get("name"):
+                      names.add(subpackage["name"])
+          print("\n".join(sorted(names)))
+          PY
+          )
 
           for arch in x86_64 aarch64 armhf; do
             mkdir -p "_site/$arch"
