@@ -1,6 +1,6 @@
 package:
   name: homematicip-local
-  version: "2.9.0"
+  version: "2.10.0"
   epoch: 0
   description: "Local Homematic and Homematic IP integration for Home Assistant"
   copyright:
