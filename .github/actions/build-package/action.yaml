@@ -71,23 +71,43 @@ runs:
           tar -xzf /tmp/APKINDEX.tar.gz -C /tmp APKINDEX 2>/dev/null || true
 
           for dep in $(echo "$LOCAL_DEPS" | jq -r '.[]'); do
-            # Skip if we already have this package from artifacts
-            if ls packages/${{ inputs.arch }}/${dep}-*.apk 2>/dev/null | grep -q .; then
-              echo "Already have ${dep} from artifacts"
-              continue
+            dep_packages=("$dep")
+
+            # A local dependency artifact also contains its subpackages. Fetch
+            # published subpackages (for example libacars-dev) when the producer
+            # itself does not need rebuilding in this workflow run.
+            if [[ -f "${dep}.yaml" ]]; then
+              while IFS= read -r subpackage; do
+                dep_packages+=("$subpackage")
+              done < <(awk '
+                /^subpackages:/ { in_subpackages = 1; next }
+                in_subpackages && /^[^[:space:]]/ { exit }
+                in_subpackages && /^  - name:[[:space:]]*/ {
+                  sub(/^  - name:[[:space:]]*/, "")
+                  print
+                }
+              ' "${dep}.yaml")
             fi
 
-            # Get version from APKINDEX
-            pkg_version=$(awk -v pkg="$dep" '
-              /^P:/ { current = substr($0, 3) }
-              /^V:/ && current == pkg { print substr($0, 3); exit }
-            ' /tmp/APKINDEX)
+            for dep_package in "${dep_packages[@]}"; do
+              # Skip if we already have this package from artifacts
+              if ls packages/${{ inputs.arch }}/${dep_package}-*.apk 2>/dev/null | grep -q .; then
+                echo "Already have ${dep_package} from artifacts"
+                continue
+              fi
 
-            if [[ -n "$pkg_version" ]]; then
-              pkg_file="${dep}-${pkg_version}.apk"
-              echo "Fetching published ${dep}: $pkg_file"
-              curl -sL "${REPO_URL}/${{ inputs.arch }}/${pkg_file}" -o "packages/${{ inputs.arch }}/${pkg_file}" || true
-            fi
+              # Get version from APKINDEX
+              pkg_version=$(awk -v pkg="$dep_package" '
+                /^P:/ { current = substr($0, 3) }
+                /^V:/ && current == pkg { print substr($0, 3); exit }
+              ' /tmp/APKINDEX)
+
+              if [[ -n "$pkg_version" ]]; then
+                pkg_file="${dep_package}-${pkg_version}.apk"
+                echo "Fetching published ${dep_package}: $pkg_file"
+                curl -sL "${REPO_URL}/${{ inputs.arch }}/${pkg_file}" -o "packages/${{ inputs.arch }}/${pkg_file}" || true
+              fi
+            done
           done
         fi
 

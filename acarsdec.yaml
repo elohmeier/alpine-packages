@@ -2,7 +2,7 @@ package:
   name: acarsdec
   version: "4.6"
   epoch: 0
-  description: "Multi-channel ACARS decoder"
+  description: "Multi-channel ACARS decoder with RTL-SDR support"
   copyright:
     - license: GPL-2.0-only
   dependencies:
