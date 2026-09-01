@@ -65,8 +65,11 @@ apk update
 | **hf40-restic-backup** | Root restic backup runtime and six-hour scheduler        | x86_64, aarch64 |
 | **libacars**           | ACARS message decoding library                           | x86_64, aarch64 |
 | **libacars-dev**       | Development headers and pkg-config metadata for libacars | x86_64, aarch64 |
+| **liquid-dsp**         | Digital signal processing library for SDR applications   | x86_64, aarch64 |
+| **liquid-dsp-dev**     | Development headers and build metadata for liquid-dsp    | x86_64, aarch64 |
 | **multimon-ng**        | Digital radio transmission decoder                       | x86_64, aarch64 |
 | **multimon-ng-tools**  | Signal generators for multimon-ng                        | x86_64, aarch64 |
+| **redsea**             | FM-RDS decoder with newline-delimited JSON output        | x86_64, aarch64 |
 | **ssh-to-age**         | Convert SSH Ed25519 keys to age keys                     | x86_64, aarch64 |
 | **welle-cli**          | Command-line DAB/DAB+ receiver using bundled Kiss FFT    | x86_64, aarch64 |
 

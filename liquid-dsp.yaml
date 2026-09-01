@@ -1,0 +1,90 @@
+package:
+  name: liquid-dsp
+  version: "1.8.2"
+  epoch: 0
+  description: "Digital signal processing library for software-defined radios"
+  copyright:
+    - license: MIT
+  target-architecture:
+    - x86_64
+    - aarch64
+  checks:
+    disabled:
+      - usrmerge
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+      - build-base
+      - ca-certificates
+      - cmake
+      - ninja
+      - pkgconf
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/jgaeddert/liquid-dsp.git
+      tag: v${{package.version}}
+      expected-commit: 03d052b89b543e6d5f9a882139ba19f7683bcd29
+
+  - runs: |
+      cmake -B build -G Ninja \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_INSTALL_LIBDIR=lib \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_EXAMPLES=OFF \
+        -DBUILD_AUTOTESTS=OFF \
+        -DBUILD_BENCHMARKS=OFF \
+        -DBUILD_SHARED_LIBS=ON \
+        -DBUILD_STATIC_LIBS=OFF \
+        -DBUILD_SANDBOX=OFF \
+        -DBUILD_DOC=OFF \
+        -DFIND_FFTW=OFF \
+        -DENABLE_COLOR=OFF \
+        -DENABLE_TIMESTAMPS=OFF
+      cmake --build build
+      DESTDIR="${{targets.destdir}}" cmake --install build
+
+  - uses: strip
+
+subpackages:
+  - name: liquid-dsp-dev
+    description: "Development files for liquid-dsp"
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      runtime:
+        - liquid-dsp=${{package.full-version}}
+    test:
+      environment:
+        contents:
+          repositories:
+            - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+            - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+          keyring:
+            - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+          packages:
+            - busybox
+            - pkgconf
+      pipeline:
+        - runs: pkg-config --modversion liquid-dsp | grep -Fx "${{package.version}}"
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+  pipeline:
+    - runs: test -e /usr/lib/libliquid.so.1
