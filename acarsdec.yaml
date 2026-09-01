@@ -1,0 +1,87 @@
+package:
+  name: acarsdec
+  version: "4.6"
+  epoch: 0
+  description: "Multi-channel ACARS decoder"
+  copyright:
+    - license: GPL-2.0-only
+  dependencies:
+    runtime:
+      - libacars
+  target-architecture:
+    - x86_64
+    - aarch64
+  checks:
+    disabled:
+      - usrmerge
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - alsa-lib-dev
+      - build-base
+      - busybox
+      - ca-certificates
+      - cjson-dev
+      - cmake
+      - libacars
+      - libacars-dev
+      - librtlsdr-dev
+      - libsndfile-dev
+      - ninja
+      - paho-mqtt-c-dev
+      - pkgconf
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/f00b4r0/acarsdec.git
+      tag: v${{package.version}}
+      expected-commit: 7cc777fb0cd67317d27a19358b37adba2135367b
+
+  - runs: |
+      cmake -B build -G Ninja \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCJSON=ON \
+        -DMQTT=ON \
+        -DALSA=ON \
+        -DLIBACARS=ON \
+        -DSNDFILE=ON \
+        -DRTLSDR=ON \
+        -DAIRSPY=OFF \
+        -DSDRPLAY=OFF \
+        -DSOAPYSDR=OFF
+      cmake --build build
+      DESTDIR="${{targets.destdir}}" cmake --install build
+
+  - uses: strip
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+  pipeline:
+    - runs: |
+        help=$(acarsdec -h 2>&1 || true)
+        printf '%s\n' "$help" | grep -F "Acarsdec v${{package.version}}"
+        printf '%s\n' "$help" | grep -F "(libacars "
+        printf '%s\n' "$help" | grep -F -- "--alsa"
+        printf '%s\n' "$help" | grep -F -- "--sndfile"
+        printf '%s\n' "$help" | grep -F -- "--rtlsdr"
+        printf '%s\n' "$help" | grep -F -- "--skip-reassembly"
+    - runs: |
+        output_help=$(acarsdec --output help 2>&1 || true)
+        printf '%s\n' "$output_help" | grep -F '"json"'
+        printf '%s\n' "$output_help" | grep -F '"mqtt"'

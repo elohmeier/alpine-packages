@@ -60,6 +60,7 @@ apk update
 
 | Package                | Description                                              | Architectures   |
 | ---------------------- | -------------------------------------------------------- | --------------- |
+| **acarsdec**           | ACARS decoder with RTL-SDR, libacars, JSON, and MQTT     | x86_64, aarch64 |
 | **ais-catcher**        | AIS receiver with RTL-SDR support                        | x86_64, aarch64 |
 | **dumpvdl2**           | VDL Mode 2 decoder with RTL-SDR, SQLite, and ZeroMQ      | x86_64, aarch64 |
 | **hf40-restic-backup** | Root restic backup runtime and six-hour scheduler        | x86_64, aarch64 |
