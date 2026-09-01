@@ -1,6 +1,6 @@
 package:
   name: zwave-js-ui
-  version: 11.22.0
+  version: 11.22.3
   epoch: 4
   description: "Z-Wave JS UI - Full-featured Z-Wave Control Panel and MQTT Gateway"
   copyright:
