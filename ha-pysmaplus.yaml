@@ -1,6 +1,6 @@
 package:
   name: ha-pysmaplus
-  version: "0.5.8"
+  version: "0.6.0"
   epoch: 0
   description: "Home Assistant custom integration for SMA devices (Speedwire + WebConnect)"
   copyright:
@@ -28,7 +28,7 @@ pipeline:
     with:
       repository: https://github.com/littleyoda/ha-pysmaplus.git
       tag: v${{package.version}}
-      expected-commit: 46dfb7dff331ded74cbfc4b6bfc089be995b5a0d
+      expected-commit: c6ed0b96d6b79349bc44fe3a781493a10fc38461
 
   - runs: |
       install -dm755 "${{targets.destdir}}/var/lib/homeassistant/custom_components"

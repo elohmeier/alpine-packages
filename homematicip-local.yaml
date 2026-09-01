@@ -1,6 +1,6 @@
 package:
   name: homematicip-local
-  version: "2.9.0"
+  version: "2.10.0"
   epoch: 0
   description: "Local Homematic and Homematic IP integration for Home Assistant"
   copyright:
@@ -28,7 +28,7 @@ pipeline:
     with:
       repository: https://github.com/SukramJ/homematicip_local.git
       tag: ${{package.version}}
-      expected-commit: 39147baeb4a5e227d9f503abe1262a04f271c48b
+      expected-commit: 3d4d69133c5f0678c0218216ff4e38b1e5aeaf3c
 
   - runs: |
       install -dm755 "${{targets.destdir}}/var/lib/homeassistant/custom_components"
