@@ -160,6 +160,30 @@ jobs:
           local-dependencies: ${{ steps.pkg.outputs.local-deps }}
 
   # ============================================
+  # Aggregate gate: one stable check name that branch
+  # protection can require. The build-phase jobs are
+  # dynamic matrix jobs, so their check names change
+  # per PR and cannot be required directly.
+  # ============================================
+  build-gate:
+    needs: [generate-matrix, build-phase-1, build-phase-2, build-phase-3]
+    # always() so the check always reports, including when a PR
+    # touches no package YAML and every build phase is skipped.
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check build results
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          if echo "$RESULTS" | jq -e 'any(.[]; .result == "failure" or .result == "cancelled")' >/dev/null; then
+            echo "::error::One or more build jobs failed or were cancelled"
+            exit 1
+          fi
+          echo "All build jobs succeeded or were skipped."
+
+  # ============================================
   # Publish to GitHub Pages
   # ============================================
   publish:
