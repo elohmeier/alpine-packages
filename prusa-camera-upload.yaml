@@ -1,0 +1,142 @@
+package:
+  name: prusa-camera-upload
+  version: 0.1.0
+  epoch: 0
+  description: "Upload uStreamer snapshots to the Prusa Connect Camera API"
+  copyright:
+    - license: Apache-2.0
+  dependencies:
+    runtime:
+      - busybox
+      - ca-certificates
+      - curl
+      - openrc
+      - ustreamer
+  target-architecture:
+    - x86_64
+    - aarch64
+  scriptlets:
+    pre-install: |
+      #!/bin/sh
+      addgroup -S prusa-camera 2>/dev/null || true
+      adduser -S -D -H -h /var/empty -s /sbin/nologin \
+          -G prusa-camera -g "Prusa Connect camera uploader" \
+          prusa-camera 2>/dev/null || true
+    post-install: |
+      #!/bin/sh
+      chown root:prusa-camera /etc/conf.d/prusa-camera-upload
+      chmod 0640 /etc/conf.d/prusa-camera-upload
+      echo ""
+      echo "=== prusa-camera-upload installed ==="
+      echo ""
+      echo "Set PRUSA_CAMERA_TOKEN and PRUSA_CAMERA_FINGERPRINT in:"
+      echo "  /etc/conf.d/prusa-camera-upload"
+      echo ""
+      echo "Then enable and start the service:"
+      echo "  rc-update add prusa-camera-upload default"
+      echo "  rc-service prusa-camera-upload start"
+      echo ""
+    post-upgrade: |
+      #!/bin/sh
+      chown root:prusa-camera /etc/conf.d/prusa-camera-upload
+      chmod 0640 /etc/conf.d/prusa-camera-upload
+      if rc-service prusa-camera-upload status >/dev/null 2>&1; then
+        rc-service prusa-camera-upload restart
+      fi
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+
+pipeline:
+  - runs: |
+      install -Dm755 prusa-camera-upload/prusa-camera-upload \
+        "${{targets.destdir}}"/usr/bin/prusa-camera-upload
+      install -Dm755 prusa-camera-upload/prusa-camera-upload.initd \
+        "${{targets.destdir}}"/etc/init.d/prusa-camera-upload
+      install -Dm640 prusa-camera-upload/prusa-camera-upload.confd \
+        "${{targets.destdir}}"/etc/conf.d/prusa-camera-upload
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+        - openrc
+  pipeline:
+    - name: "Verify installed files"
+      runs: |
+        test -x /usr/bin/prusa-camera-upload
+        test -x /etc/init.d/prusa-camera-upload
+        test -f /etc/conf.d/prusa-camera-upload
+        test "$(stat -c '%a' /etc/conf.d/prusa-camera-upload)" = 640
+    - name: "Check shell syntax and safe defaults"
+      runs: |
+        sh -n /usr/bin/prusa-camera-upload
+        sh -n /etc/init.d/prusa-camera-upload
+        /usr/bin/prusa-camera-upload --help | grep -q 'Prusa Connect'
+        grep -q '^PRUSA_CAMERA_TOKEN=""$' /etc/conf.d/prusa-camera-upload
+        grep -q '^PRUSA_CAMERA_FINGERPRINT=""$' /etc/conf.d/prusa-camera-upload
+        grep -q '^respawn_delay=5$' /etc/init.d/prusa-camera-upload
+        grep -q '^respawn_max=0$' /etc/init.d/prusa-camera-upload
+    - name: "Upload one snapshot through a mock curl client"
+      runs: |
+        install -dm700 /run/prusa-camera-upload /tmp/mock-bin
+        cat >/tmp/mock-bin/curl <<'EOF'
+        #!/bin/sh
+        mode=
+        output=
+        body=
+        next_is_output=no
+        for arg in "$@"; do
+          if [ "$next_is_output" = yes ]; then
+            output=$arg
+            next_is_output=no
+            continue
+          fi
+          case "$arg" in
+            --output) next_is_output=yes ;;
+            http://mock-camera/snapshot) mode=fetch ;;
+            https://mock-prusa/upload) mode=upload ;;
+            @*) body=${arg#@} ;;
+          esac
+        done
+        case "$mode" in
+          fetch)
+            printf '\377\330mock-jpeg\377\331' >"$output"
+            ;;
+          upload)
+            tee /tmp/mock-curl-headers >/dev/null
+            test -s "$body"
+            ;;
+          *) exit 1 ;;
+        esac
+        EOF
+        chmod 0755 /tmp/mock-bin/curl
+
+        cat >/tmp/prusa-camera-upload.conf <<'EOF'
+        PRUSA_CAMERA_TOKEN="12345678901234567890"
+        PRUSA_CAMERA_FINGERPRINT="camera1234567890"
+        PRUSA_CAMERA_SNAPSHOT_URL="http://mock-camera/snapshot"
+        PRUSA_CAMERA_UPLOAD_URL="https://mock-prusa/upload"
+        PRUSA_CAMERA_RUNTIME_DIR="/run/prusa-camera-upload"
+        EOF
+
+        PATH="/tmp/mock-bin:$PATH" \
+          /usr/bin/prusa-camera-upload --once \
+          --config /tmp/prusa-camera-upload.conf \
+          | grep -q 'upload succeeded'
+        grep -q 'Token: 12345678901234567890' /tmp/mock-curl-headers
+        grep -q 'Fingerprint: camera1234567890' /tmp/mock-curl-headers
+        grep -q 'Content-Type: image/jpeg' /tmp/mock-curl-headers

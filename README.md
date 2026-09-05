@@ -46,9 +46,10 @@ apk update
 
 ### 3D Printing
 
-| Package       | Description                     | Architectures          |
-| ------------- | ------------------------------- | ---------------------- |
-| **prusalink** | PrusaLink for Prusa 3D printers | x86_64, aarch64, armhf |
+| Package                   | Description                                           | Architectures          |
+| ------------------------- | ----------------------------------------------------- | ---------------------- |
+| **prusalink**             | PrusaLink for Prusa 3D printers                       | x86_64, aarch64, armhf |
+| **prusa-camera-upload**   | Upload uStreamer snapshots to Prusa Connect           | x86_64, aarch64        |
 
 ### Document Management
 
@@ -367,6 +368,29 @@ rc-update add ustreamer default
 Defaults to `--device=/dev/video0` on `127.0.0.1:8080`; set `USTREAMER_HOST` to a LAN address only together with `--user`/`--passwd` in `USTREAMER_OPTS`, since the stream is otherwise unauthenticated. A missing capture device is not fatal — µStreamer serves a "NO LIVE VIDEO" frame and picks the device up when it appears.
 
 Built without the PiKVM-specific options (GPIO, Janus, V4P) and without systemd.
+
+### prusa-camera-upload
+
+Uploads JPEG snapshots from uStreamer's `/snapshot` endpoint to the Prusa
+Connect Camera API every ten seconds. The local MJPEG stream remains available
+independently through uStreamer.
+
+```sh
+apk add prusa-camera-upload
+vi /etc/conf.d/prusa-camera-upload
+rc-update add prusa-camera-upload default
+rc-service prusa-camera-upload start
+```
+
+- **Config:** `/etc/conf.d/prusa-camera-upload`
+- **Log:** `/var/log/prusa-camera-upload.log`
+- **Requires:** a Prusa Connect camera token and stable 16–40 character fingerprint
+- **Runs as:** `prusa-camera:prusa-camera`
+- **Source snapshot:** `http://127.0.0.1:8080/snapshot` by default
+
+The token configuration is installed with mode `0640`. Sensitive HTTP headers
+are provided to curl through standard input, keeping the token out of process
+arguments and service logs.
 
 ## Building Locally
 

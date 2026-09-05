@@ -1,0 +1,34 @@
+#!/sbin/openrc-run
+# SPDX-License-Identifier: Apache-2.0
+
+name="Prusa Connect camera uploader"
+description="Upload uStreamer snapshots to Prusa Connect"
+
+command="/usr/bin/prusa-camera-upload"
+command_args="--config /etc/conf.d/${RC_SVCNAME}"
+command_user="prusa-camera:prusa-camera"
+supervisor=supervise-daemon
+respawn_delay=5
+respawn_max=0
+
+output_log="/var/log/${RC_SVCNAME}.log"
+error_log="/var/log/${RC_SVCNAME}.log"
+
+depend() {
+	need net ustreamer
+	after firewall
+}
+
+start_pre() {
+	if [ -z "${PRUSA_CAMERA_TOKEN:-}" ]; then
+		eerror "PRUSA_CAMERA_TOKEN is not configured"
+		return 1
+	fi
+	if [ -z "${PRUSA_CAMERA_FINGERPRINT:-}" ]; then
+		eerror "PRUSA_CAMERA_FINGERPRINT is not configured"
+		return 1
+	fi
+
+	checkpath -d -m 0750 -o "$command_user" /run/prusa-camera-upload
+	checkpath -f -m 0640 -o "$command_user" "$output_log"
+}

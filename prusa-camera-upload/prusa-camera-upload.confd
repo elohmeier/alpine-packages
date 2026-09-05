@@ -1,0 +1,20 @@
+# Prusa Connect camera registration.
+#
+# In Prusa Connect, open the printer's Camera tab, select "Add new other
+# camera", and copy its token here. Generate one stable fingerprint per
+# physical camera and do not change it after the first successful upload.
+PRUSA_CAMERA_TOKEN=""
+PRUSA_CAMERA_FINGERPRINT=""
+
+# uStreamer's local still-image endpoint.
+#PRUSA_CAMERA_SNAPSHOT_URL="http://127.0.0.1:8080/snapshot"
+
+# Prusa Connect Camera API endpoint.
+#PRUSA_CAMERA_UPLOAD_URL="https://webcam.connect.prusa3d.com/c/snapshot"
+
+# Seconds between successful uploads and between failed attempts.
+#PRUSA_CAMERA_INTERVAL="10"
+#PRUSA_CAMERA_RETRY_INTERVAL="60"
+
+# Runtime directory created by the OpenRC service.
+#PRUSA_CAMERA_RUNTIME_DIR="/run/prusa-camera-upload"

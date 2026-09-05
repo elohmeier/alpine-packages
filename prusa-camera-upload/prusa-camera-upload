@@ -1,0 +1,161 @@
+#!/bin/sh
+# SPDX-License-Identifier: Apache-2.0
+
+set -u
+umask 077
+
+usage() {
+	cat <<'EOF'
+Upload snapshots from an HTTP camera endpoint to Prusa Connect.
+
+Usage: prusa-camera-upload [--once] [--config FILE]
+
+Options:
+  --once         Perform one upload attempt and exit
+  -c, --config   Read configuration from FILE
+  -h, --help     Show this help
+EOF
+}
+
+die() {
+	printf 'prusa-camera-upload: %s\n' "$*" >&2
+	exit 1
+}
+
+once=no
+config_file=/etc/conf.d/prusa-camera-upload
+
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+		--once)
+			once=yes
+			shift
+			;;
+		-c|--config)
+			[ "$#" -ge 2 ] || die "$1 requires a file"
+			config_file=$2
+			shift 2
+			;;
+		-h|--help)
+			usage
+			exit 0
+			;;
+		*)
+			die "unknown argument: $1"
+			;;
+	esac
+done
+
+[ -r "$config_file" ] || die "cannot read configuration: $config_file"
+
+# The configuration is root-managed and readable only by this service's
+# group. Keep its values as shell variables instead of exporting the camera
+# token to child processes.
+# shellcheck disable=SC1090
+. "$config_file"
+
+: "${PRUSA_CAMERA_TOKEN:=}"
+: "${PRUSA_CAMERA_FINGERPRINT:=}"
+: "${PRUSA_CAMERA_SNAPSHOT_URL:=http://127.0.0.1:8080/snapshot}"
+: "${PRUSA_CAMERA_UPLOAD_URL:=https://webcam.connect.prusa3d.com/c/snapshot}"
+: "${PRUSA_CAMERA_INTERVAL:=10}"
+: "${PRUSA_CAMERA_RETRY_INTERVAL:=60}"
+: "${PRUSA_CAMERA_RUNTIME_DIR:=/run/prusa-camera-upload}"
+
+case "$PRUSA_CAMERA_TOKEN" in
+	*[!A-Za-z0-9]*) die "PRUSA_CAMERA_TOKEN must be alphanumeric" ;;
+esac
+[ "${#PRUSA_CAMERA_TOKEN}" -eq 20 ] || \
+	die "PRUSA_CAMERA_TOKEN must contain exactly 20 characters"
+
+case "$PRUSA_CAMERA_FINGERPRINT" in
+	*[!A-Za-z0-9._:-]*) die "PRUSA_CAMERA_FINGERPRINT contains unsafe characters" ;;
+esac
+[ "${#PRUSA_CAMERA_FINGERPRINT}" -ge 16 ] && \
+	[ "${#PRUSA_CAMERA_FINGERPRINT}" -le 40 ] || \
+	die "PRUSA_CAMERA_FINGERPRINT must contain 16 to 40 characters"
+
+for value_name in PRUSA_CAMERA_INTERVAL PRUSA_CAMERA_RETRY_INTERVAL; do
+	eval "value=\${$value_name}"
+	case "$value" in
+		''|*[!0-9]*) die "$value_name must be a positive integer" ;;
+	esac
+	[ "$value" -gt 0 ] || die "$value_name must be greater than zero"
+done
+
+[ -d "$PRUSA_CAMERA_RUNTIME_DIR" ] || \
+	die "runtime directory does not exist: $PRUSA_CAMERA_RUNTIME_DIR"
+
+snapshot_file=$PRUSA_CAMERA_RUNTIME_DIR/snapshot.jpg
+last_state=
+sleep_pid=
+
+report_state() {
+	state=$1
+	message=$2
+	if [ "$last_state" != "$state" ]; then
+		printf '%s %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$message"
+		last_state=$state
+	fi
+}
+
+stop_service() {
+	if [ -n "$sleep_pid" ]; then
+		kill "$sleep_pid" 2>/dev/null || true
+	fi
+	exit 0
+}
+
+upload_once() {
+	if ! curl --fail --silent --show-error \
+		--connect-timeout 3 --max-time 5 \
+		--output "$snapshot_file" \
+		"$PRUSA_CAMERA_SNAPSHOT_URL"; then
+		return 2
+	fi
+
+	# Feed sensitive headers to curl over stdin so the token does not appear
+	# in the process command line or service logs.
+	{
+		printf 'header = "Token: %s"\n' "$PRUSA_CAMERA_TOKEN"
+		printf 'header = "Fingerprint: %s"\n' "$PRUSA_CAMERA_FINGERPRINT"
+		printf 'header = "Content-Type: image/jpeg"\n'
+	} | curl --config - --fail --silent --show-error \
+		--connect-timeout 10 --max-time 30 \
+		--request PUT \
+		--data-binary "@$snapshot_file" \
+		--output /dev/null \
+		"$PRUSA_CAMERA_UPLOAD_URL" || return 3
+}
+
+trap stop_service INT TERM
+
+while :; do
+	upload_once
+	result=$?
+	case "$result" in
+		0)
+			report_state online "Prusa Connect camera upload succeeded"
+			delay=$PRUSA_CAMERA_INTERVAL
+			;;
+		2)
+			report_state snapshot_error \
+				"Local camera snapshot failed; retrying later"
+			delay=$PRUSA_CAMERA_RETRY_INTERVAL
+			;;
+		*)
+			report_state upload_error \
+				"Prusa Connect camera upload failed; retrying later"
+			delay=$PRUSA_CAMERA_RETRY_INTERVAL
+			;;
+	esac
+
+	if [ "$once" = yes ]; then
+		exit "$result"
+	fi
+
+	sleep "$delay" &
+	sleep_pid=$!
+	wait "$sleep_pid" || true
+	sleep_pid=
+done
