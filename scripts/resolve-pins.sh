@@ -1,11 +1,22 @@
 #!/usr/bin/env bash
 # Resolve expected-commit SHAs and checksums after Renovate version bumps.
 # Run from the repository root.
+#
+# Usage: resolve-pins.sh [package.yaml ...]
+# With no arguments every *.yaml is processed. Pass the files a PR actually
+# touched so unrelated packages never get committed onto its branch.
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
 
-for yaml in *.yaml; do
+if [ "$#" -gt 0 ]; then
+  targets=("$@")
+else
+  targets=(*.yaml)
+fi
+
+for yaml in "${targets[@]}"; do
+  [ -f "$yaml" ] || continue
   version=$(yq -r '.package.version' "$yaml" 2>/dev/null || true)
   [ -z "$version" ] || [ "$version" = "null" ] && continue
 
