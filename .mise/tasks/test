@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+#MISE description="Test a package with melange in the QEMU runner"
+set -euo pipefail
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: mise run test <package>.yaml [melange test args...]"
+  exit 1
+fi
+
+if [[ ! -f "$QEMU_KERNEL_IMAGE" ]]; then
+  echo "Error: no kernel at $QEMU_KERNEL_IMAGE"
+  echo "Run: mise run fetch-kernel"
+  exit 1
+fi
+
+if [[ ! -f "$QEMU_BASE_INITRAMFS" ]]; then
+  echo "Error: no base initramfs at $QEMU_BASE_INITRAMFS"
+  echo "Run: mise run build-initramfs"
+  exit 1
+fi
+
+# melange has no env-var fallback for its flags, so pass the local defaults here.
+# The QEMU_* paths above are read from the environment by the qemu runner.
+exec melange test \
+  --arch "$MELANGE_ARCH" \
+  --runner qemu \
+  --disk 10Gi \
+  --repository-append ./packages \
+  --keyring-append local-melange.rsa.pub \
+  --pipeline-dirs ./pipelines \
+  "$@"

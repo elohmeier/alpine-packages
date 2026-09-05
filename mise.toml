@@ -1,17 +1,12 @@
 [env]
 _.path = ["~/repos/github.com/chainguard-dev/melange"]
+
+# melange reads none of its flags from MELANGE_*-style env vars, so the local
+# defaults (signing key, local repo, pipeline dir, qemu runner) live in the
+# build and test tasks instead.
+#
+# env.sh exports MELANGE_ARCH — the one architecture knob, consumed by those
+# tasks — plus the QEMU_* paths that melange's qemu runner does read from the
+# environment. mise does not expose env keys of this table to sourced scripts,
+# so the architecture is defined there and not here.
 _.source = [".mise/env.sh"]
-
-MELANGE_ARCH = "arm64"
-MELANGE_REPOSITORY_APPEND = "packages"
-MELANGE_KEYRING_APPEND = "local-melange.rsa.pub"
-MELANGE_SIGNING_KEY = "local-melange.rsa"
-
-MELANGE_TEST_RUNNER = "qemu"
-MELANGE_TEST_DISK = "10Gi"
-MELANGE_PIPELINE_DIRS = "{{config_root}}/pipelines"
-QEMU_KERNEL_IMAGE = "{{config_root}}/kernel/{% if arch() == 'arm64' %}aarch64{% else %}{{arch()}}{% endif %}/vmlinuz"
-QEMU_KERNEL_MODULES = "{{config_root}}/kernel/{% if arch() == 'arm64' %}aarch64{% else %}{{arch()}}{% endif %}/modules/"
-QEMU_MICROVM_INIT_SIGNING_KEY = "local-melange.rsa"
-QEMU_MICROVM_INIT_REPOSITORY = "https://dl-cdn.alpinelinux.org/alpine/v3.24/main"
-QEMU_MICROVM_INIT_KEYRING = "https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub"

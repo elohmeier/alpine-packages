@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+#MISE description="Build a package with melange (local repo, key and pipelines)"
+set -euo pipefail
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: mise run build <package>.yaml [melange build args...]"
+  exit 1
+fi
+
+# melange has no env-var fallback for its flags, so pass the local defaults here.
+exec melange build \
+  --arch "$MELANGE_ARCH" \
+  --signing-key local-melange.rsa \
+  --repository-append ./packages \
+  --keyring-append local-melange.rsa.pub \
+  --pipeline-dirs ./pipelines \
+  "$@"

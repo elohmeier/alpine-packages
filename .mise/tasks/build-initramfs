@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+#MISE description="Build the QEMU base initramfs used by melange test"
+set -euo pipefail
+
+ARCH="${1:-${MELANGE_ARCH:-$(uname -m)}}"
+case "$ARCH" in
+  arm64 | aarch64) ARCH="aarch64" ;;
+  x64 | amd64 | x86_64) ARCH="x86_64" ;;
+  *)
+    echo "Error: unsupported architecture: $ARCH"
+    exit 1
+    ;;
+esac
+
+ALPINE_MAIN="https://dl-cdn.alpinelinux.org/alpine/v3.24/main"
+ALPINE_COMMUNITY="https://dl-cdn.alpinelinux.org/alpine/v3.24/community"
+ALPINE_KEY="https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub"
+
+OUT=".test-cache/melange-base-initramfs-$ARCH.cpio"
+
+# melange defaults to the microvm-init from https://apk.cgr.dev/chainguard,
+# which needs credentials we do not have. Use the one built from this repo.
+if ! ls packages/"$ARCH"/microvm-init-*.apk >/dev/null 2>&1; then
+  echo "Building microvm-init for $ARCH..."
+  melange build --arch "$ARCH" microvm-init.yaml
+fi
+
+echo "Building base initramfs for $ARCH..."
+mkdir -p .test-cache
+melange initramfs \
+  --arch "$ARCH" \
+  --output "$OUT" \
+  --init-package microvm-init \
+  --repository "$PWD/packages" \
+  --repository "$ALPINE_MAIN" \
+  --repository "$ALPINE_COMMUNITY" \
+  --keyring "$PWD/local-melange.rsa.pub" \
+  --keyring "$ALPINE_KEY"
+
+echo "Base initramfs written to $OUT"
+echo "melange test picks it up via QEMU_BASE_INITRAMFS."

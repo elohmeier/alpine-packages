@@ -12,39 +12,37 @@ pipelines/          # reusable melange pipelines
 
 ## mise Configuration
 
-The `mise.toml` configures environment variables for melange. With mise activated, commands use these defaults automatically:
+melange does **not** read its flags from `MELANGE_*` environment variables, so the local defaults (signing key, local repo, pipeline dir, QEMU runner) live in the `build` and `test` mise tasks:
 
 ```bash
-# Instead of:
-melange build --arch arm64 --signing-key local-melange.rsa \
-  --repository-append ./packages --keyring-append local-melange.rsa.pub \
-  --pipeline-dirs ./pipelines <package>.yaml
-
-# Just run:
-melange build <package>.yaml
-melange test <package>.yaml
+mise run build <package>.yaml   # melange build with the local key, repo and pipelines
+mise run test <package>.yaml    # melange test in the QEMU runner
 ```
 
-Key environment variables:
+Extra melange arguments are passed through, e.g. `mise run build <package>.yaml --out-dir /tmp`.
 
-- `MELANGE_ARCH` - target architecture (arm64)
-- `MELANGE_SIGNING_KEY` - signing key path
-- `MELANGE_REPOSITORY_APPEND` / `MELANGE_KEYRING_APPEND` - local repo
-- `MELANGE_PIPELINE_DIRS` - custom pipeline directory
-- `MELANGE_TEST_RUNNER` - test runner (qemu)
-- `QEMU_KERNEL_IMAGE` / `QEMU_KERNEL_MODULES` - kernel for QEMU tests
+`.mise/env.sh` exports the only architecture knob plus the paths melange's QEMU runner does read from the environment:
+
+- `MELANGE_ARCH` - target architecture, `aarch64` unless pre-exported (`MELANGE_ARCH=x86_64 mise run test …`)
+- `QEMU_KERNEL_IMAGE` / `QEMU_KERNEL_MODULES` - kernel for QEMU tests, from `mise run fetch-kernel`
+- `QEMU_BASE_INITRAMFS` - guest initramfs, from `mise run build-initramfs`
 
 ### mise Tasks
 
 ```bash
-mise run fetch-kernel [arch]   # Download Alpine linux-virt kernel for QEMU testing
-mise run resign-packages [arch] # Resign all packages and regenerate APKINDEX
+mise run build <package>.yaml    # Build a package
+mise run test <package>.yaml     # Test a package in QEMU
+mise run fetch-kernel [arch]     # Download Alpine linux-virt kernel for QEMU testing
+mise run build-initramfs [arch]  # Build the QEMU base initramfs from this repo's microvm-init
+mise run resign-packages [arch]  # Resign all packages and regenerate APKINDEX
 ```
+
+`build-initramfs` exists because melange otherwise pulls its `microvm-init` from `https://apk.cgr.dev/chainguard`, which we cannot authenticate against; the VM then panics with `No working init found`.
 
 ## Building
 
 ```bash
-melange build --arch arm64 <package>.yaml
+mise run build <package>.yaml
 ```
 
 ## Local Development
@@ -58,35 +56,23 @@ melange keygen local-melange.rsa
 Build a package with local dependencies (e.g., matter-server depends on zap-cli):
 
 ```bash
-# Build dependency first
-melange build --arch arm64 --signing-key local-melange.rsa zap-cli.yaml
-
-# Build package with local repo
-melange build --arch arm64 --signing-key local-melange.rsa \
-  --repository-append ./packages --keyring-append local-melange.rsa.pub \
-  matter-server.yaml
+# Build the dependency first; it lands in ./packages and is picked up from there
+mise run build zap-cli.yaml
+mise run build matter-server.yaml
 ```
 
-Run tests:
+Prepare the QEMU test environment (one-time per architecture):
 
 ```bash
-melange test --arch arm64 \
-  --repository-append ./packages --keyring-append local-melange.rsa.pub \
-  <package>.yaml
+mise run fetch-kernel
+mise run build-initramfs
 ```
 
 Build and test workflow:
 
 ```bash
-# 1. Build the package
-melange build --arch arm64 --signing-key local-melange.rsa \
-  --repository-append ./packages --keyring-append local-melange.rsa.pub \
-  <package>.yaml
-
-# 2. Run tests against the built package
-melange test --arch arm64 \
-  --repository-append ./packages --keyring-append local-melange.rsa.pub \
-  <package>.yaml
+mise run build <package>.yaml
+mise run test <package>.yaml
 ```
 
 Inspect package contents:
@@ -251,7 +237,7 @@ test:
 2. Get the tag's commit SHA: `gh api repos/<owner>/<repo>/git/refs/tags/<tag> --jq '.object.sha'`
 3. Check the `custom_components/<domain>/manifest.json` for the domain name and Python requirements
 4. Create `<package-name>.yaml` using the template above, replacing `<domain>`, `<owner>/<repo>`, `<commit-sha>`, etc.
-5. Build locally: `melange build <package-name>.yaml`
+5. Build locally: `mise run build <package-name>.yaml`
 6. Verify contents: `tar -tzf packages/aarch64/<package-name>-<version>.apk`
 7. Commit and push — CI builds and publishes to GitHub Pages
 8. Install on target: `apk update && apk add <package-name>`
@@ -502,7 +488,7 @@ test:
 Use `test/debug` to pause execution and inspect the test environment. Run with interactive flags:
 
 ```bash
-melange test --interactive --debug-runner <package>.yaml
+mise run test <package>.yaml --interactive --debug-runner
 ```
 
 Add the debug pipeline between health check and stop to debug a running container:
@@ -529,7 +515,7 @@ While paused:
 - Create `/tmp/debug-continue` inside the VM to resume execution
 - Press Ctrl+C in melange to abort
 
-**IMPORTANT:** After modifying a package yaml, always run `melange build <package>.yaml` to verify the configuration is valid.
+**IMPORTANT:** After modifying a package yaml, always run `mise run build <package>.yaml` to verify the configuration is valid.
 
 ## Relevant sources
 
