@@ -5,7 +5,8 @@ description="FTP/SFTP to Paperless-ngx bridge service"
 command="/usr/bin/ftp-paperless-bridge"
 command_user="paperless:paperless"
 supervisor=supervise-daemon
-supervise_daemon_args="--respawn-delay 10 --respawn-max 0"
+respawn_delay=10
+respawn_max=0
 output_log="/var/log/${RC_SVCNAME}.log"
 error_log="/var/log/${RC_SVCNAME}.log"
 

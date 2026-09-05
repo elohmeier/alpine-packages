@@ -1,7 +1,7 @@
 package:
   name: ftp-paperless-bridge
   version: "0.4.0"
-  epoch: 4
+  epoch: 5
   description: "FTP/SFTP server bridge for network document scanners to paperless-ngx"
   copyright:
     - license: Apache-2.0
@@ -108,7 +108,12 @@ test:
         test -x /etc/init.d/ftp-paperless-bridge
         test -x /sbin/openrc-run
         grep -q '^supervisor=supervise-daemon$' /etc/init.d/ftp-paperless-bridge
-        grep -q -- '--respawn-delay 10 --respawn-max 0' /etc/init.d/ftp-paperless-bridge
+        # Respawn settings go through OpenRC's own variables. Passing them via
+        # supervise_daemon_args appends them after the arguments OpenRC already
+        # generates, so supervise-daemon sees each flag twice.
+        grep -q '^respawn_delay=10$' /etc/init.d/ftp-paperless-bridge
+        grep -q '^respawn_max=0$' /etc/init.d/ftp-paperless-bridge
+        ! grep -q '^supervise_daemon_args=' /etc/init.d/ftp-paperless-bridge
         grep -q 'FTP_PAPERLESS_BRIDGE_SFTP_LISTEN' /etc/init.d/ftp-paperless-bridge
         grep -q 'FTP_PAPERLESS_BRIDGE_SFTP_LISTEN' /etc/conf.d/ftp-paperless-bridge
         grep -q 'FTP_PAPERLESS_BRIDGE_SFTP_HOST_KEY' /etc/conf.d/ftp-paperless-bridge
