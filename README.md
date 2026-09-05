@@ -72,6 +72,7 @@ apk update
 | **multimon-ng-tools**  | Signal generators for multimon-ng                        | x86_64, aarch64 |
 | **redsea**             | FM-RDS decoder with newline-delimited JSON output        | x86_64, aarch64 |
 | **ssh-to-age**         | Convert SSH Ed25519 keys to age keys                     | x86_64, aarch64 |
+| **ustreamer**          | MJPEG-HTTP streamer for V4L2 capture devices             | x86_64, aarch64 |
 | **welle-cli**          | Command-line DAB/DAB+ receiver using bundled Kiss FFT    | x86_64, aarch64 |
 
 ### AI / Developer Tools
@@ -345,6 +346,27 @@ rc-update add ftp-paperless-bridge default
 - **Required settings:** `FTP_PAPERLESS_BRIDGE_PAPERLESS_URL`, `FTP_PAPERLESS_BRIDGE_PAPERLESS_API_TOKEN`, change default `FTP_PAPERLESS_BRIDGE_PASSWORD`
 
 Point your scanner's FTP upload to `<host>:2121` with the configured credentials.
+
+### ustreamer
+
+µStreamer streams MJPEG over HTTP from any V4L2 device (USB webcam, CSI camera, HDMI capture stick).
+
+```sh
+apk add ustreamer
+vi /etc/conf.d/ustreamer
+rc-service ustreamer start
+rc-update add ustreamer default
+```
+
+- **Port:** 8080 (`/` viewer, `/stream`, `/snapshot`, `/state`)
+- **Config:** `/etc/conf.d/ustreamer`
+- **Log:** `/var/log/ustreamer.log`
+- **Runs as:** `ustreamer:video` (the account is created on install)
+- **Binaries:** `ustreamer`, `ustreamer-dump`
+
+Defaults to `--device=/dev/video0` on `127.0.0.1:8080`; set `USTREAMER_HOST` to a LAN address only together with `--user`/`--passwd` in `USTREAMER_OPTS`, since the stream is otherwise unauthenticated. A missing capture device is not fatal — µStreamer serves a "NO LIVE VIDEO" frame and picks the device up when it appears.
+
+Built without the PiKVM-specific options (GPIO, Janus, V4P) and without systemd.
 
 ## Building Locally
 

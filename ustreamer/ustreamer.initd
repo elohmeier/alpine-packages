@@ -1,0 +1,54 @@
+#!/sbin/openrc-run
+# OpenRC init script for uStreamer
+
+name="uStreamer"
+description="Lightweight and fast MJPEG-HTTP streamer"
+
+: ${USTREAMER_DEVICE:="/dev/video0"}
+: ${USTREAMER_HOST:="127.0.0.1"}
+: ${USTREAMER_PORT:="8080"}
+: ${USTREAMER_USER:="ustreamer"}
+: ${USTREAMER_GROUP:="video"}
+
+command="/usr/bin/ustreamer"
+command_user="${USTREAMER_USER}:${USTREAMER_GROUP}"
+supervisor=supervise-daemon
+supervise_daemon_args="--respawn-delay 5 --respawn-max 0"
+output_log="/var/log/${RC_SVCNAME}.log"
+error_log="/var/log/${RC_SVCNAME}.log"
+
+command_args="--device=${USTREAMER_DEVICE} --host=${USTREAMER_HOST} --port=${USTREAMER_PORT}"
+if [ -n "$USTREAMER_DEVICE_TIMEOUT" ]; then
+	command_args="$command_args --device-timeout=$USTREAMER_DEVICE_TIMEOUT"
+fi
+if [ -n "$USTREAMER_RESOLUTION" ]; then
+	command_args="$command_args --resolution=$USTREAMER_RESOLUTION"
+fi
+if [ -n "$USTREAMER_FORMAT" ]; then
+	command_args="$command_args --format=$USTREAMER_FORMAT"
+fi
+if [ -n "$USTREAMER_DESIRED_FPS" ]; then
+	command_args="$command_args --desired-fps=$USTREAMER_DESIRED_FPS"
+fi
+if [ -n "$USTREAMER_QUALITY" ]; then
+	command_args="$command_args --quality=$USTREAMER_QUALITY"
+fi
+if yesno "${USTREAMER_SLOWDOWN:-no}"; then
+	command_args="$command_args --slowdown"
+fi
+command_args="$command_args ${USTREAMER_OPTS}"
+
+depend() {
+	need net
+	after firewall
+}
+
+start_pre() {
+	checkpath -f -m 0644 -o "$command_user" "$output_log"
+
+	# uStreamer keeps serving a "NO LIVE VIDEO" frame and reopens the device
+	# once it appears, so a missing device is a warning and not an error.
+	if [ ! -c "$USTREAMER_DEVICE" ]; then
+		ewarn "Capture device $USTREAMER_DEVICE does not exist yet"
+	fi
+}

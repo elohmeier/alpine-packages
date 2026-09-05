@@ -1,0 +1,119 @@
+package:
+  name: ustreamer
+  version: "6.65"
+  epoch: 0
+  description: "Lightweight and fast MJPEG-HTTP streamer for V4L2 devices"
+  copyright:
+    - license: GPL-3.0-or-later
+  target-architecture:
+    - x86_64
+    - aarch64
+  scriptlets:
+    pre-install: |
+      #!/bin/sh
+      addgroup -S ustreamer 2>/dev/null || true
+      adduser -S -D -H -h /var/empty -s /sbin/nologin -G ustreamer \
+          -g "uStreamer daemon" ustreamer 2>/dev/null || true
+      addgroup ustreamer video 2>/dev/null || true
+    post-upgrade: |
+      #!/bin/sh
+      if rc-service ustreamer status >/dev/null 2>&1; then
+        rc-service ustreamer restart
+      fi
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - build-base
+      - busybox
+      - libbsd-dev
+      - libevent-dev
+      - libjpeg-turbo-dev
+      - linux-headers
+      - pkgconf
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/pikvm/ustreamer.git
+      tag: v${{package.version}}
+      expected-commit: db87e03ce769d06ba62314ca7537e1cb3369b4de
+
+  # WITH_GPIO/WITH_JANUS/WITH_V4P are PiKVM-specific and pull in libgpiod,
+  # janus-gateway and libdrm; WITH_SYSTEMD is meaningless on OpenRC.
+  - runs: |
+      make -j"$(nproc)" PREFIX=/usr
+      make install PREFIX=/usr DESTDIR="${{targets.destdir}}"
+
+  - runs: |
+      install -Dm755 ustreamer/ustreamer.initd "${{targets.destdir}}"/etc/init.d/ustreamer
+      install -Dm644 ustreamer/ustreamer.confd "${{targets.destdir}}"/etc/conf.d/ustreamer
+
+  - uses: strip
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        # alpine-baselayout provides /var/log and /var/run, which the service
+        # needs for its log file and supervise-daemon pidfile.
+        - alpine-baselayout
+        - busybox
+        - curl
+        - openrc
+  pipeline:
+    - runs: |
+        test "$(ustreamer --version)" = "${{package.version}}"
+        test "$(ustreamer-dump --version)" = "${{package.version}}"
+
+        features=$(ustreamer --features)
+        printf '%s\n' "$features" | grep -qx -- "+ WITH_PTHREAD_NP"
+        printf '%s\n' "$features" | grep -qx -- "+ WITH_SETPROCTITLE"
+        printf '%s\n' "$features" | grep -qx -- "+ WITH_PDEATHSIG"
+        printf '%s\n' "$features" | grep -qx -- "- WITH_SYSTEMD"
+
+        test -f /usr/share/man/man1/ustreamer.1.gz
+        test -f /usr/share/man/man1/ustreamer-dump.1.gz
+    - runs: |
+        test -x /etc/init.d/ustreamer
+        sh -n /etc/init.d/ustreamer
+        grep -q '^supervisor=supervise-daemon$' /etc/init.d/ustreamer
+        grep -q 'USTREAMER_DEVICE' /etc/conf.d/ustreamer
+
+        # The test rootfs is assembled by apko, which does not run apk
+        # scriptlets, so recreate the account that pre-install provides.
+        addgroup -S video 2>/dev/null || true
+        addgroup -S ustreamer
+        adduser -S -D -H -h /var/empty -s /sbin/nologin -G ustreamer \
+            -g "uStreamer daemon" ustreamer
+        addgroup ustreamer video
+        id -nG ustreamer | grep -qw video
+    - uses: test/openrc-start
+      with:
+        service_name: ustreamer
+    - uses: test/http-health
+      with:
+        url: "http://127.0.0.1:8080/state"
+        expected: '"ok": true'
+        timeout: "30"
+    - name: "Serves the blank frame without a capture device"
+      runs: |
+        # The test VM has no /dev/video0, so uStreamer must stay up, report the
+        # stream as offline and still hand out the "NO LIVE VIDEO" JPEG.
+        curl -sf -D /tmp/snapshot.headers -o /tmp/snapshot.jpeg \
+          http://127.0.0.1:8080/snapshot
+        grep -qi '^X-UStreamer-Online: false' /tmp/snapshot.headers
+        head -c 2 /tmp/snapshot.jpeg | od -An -tx1 | grep -q 'ff d8'
+    - uses: test/openrc-stop
+      with:
+        service_name: ustreamer
