@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: read
     steps:
       - uses: actions/checkout@v7
         with:
@@ -20,7 +21,19 @@ jobs:
       - name: Resolve expected-commit SHAs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bash scripts/resolve-pins.sh
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # Only touch the YAML files this PR changed — otherwise unrelated
+          # packages get committed onto the branch, which makes Renovate treat
+          # it as user-edited and stop updating it.
+          mapfile -t changed < <(gh pr diff "$PR_NUMBER" --name-only \
+            | grep -E '^[^/]+\.yaml$' || true)
+          if [ "${#changed[@]}" -eq 0 ]; then
+            echo "No top-level package YAML changed; nothing to resolve."
+            exit 0
+          fi
+          printf 'Resolving pins for: %s\n' "${changed[*]}"
+          bash scripts/resolve-pins.sh "${changed[@]}"
 
       - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v7
