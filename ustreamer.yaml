@@ -1,7 +1,7 @@
 package:
   name: ustreamer
   version: "6.65"
-  epoch: 0
+  epoch: 1
   description: "Lightweight and fast MJPEG-HTTP streamer for V4L2 devices"
   copyright:
     - license: GPL-3.0-or-later
@@ -89,6 +89,13 @@ test:
         sh -n /etc/init.d/ustreamer
         grep -q '^supervisor=supervise-daemon$' /etc/init.d/ustreamer
         grep -q 'USTREAMER_DEVICE' /etc/conf.d/ustreamer
+
+        # Respawn settings go through OpenRC's own variables. Passing them via
+        # supervise_daemon_args appends them after the arguments OpenRC already
+        # generates, so supervise-daemon sees each flag twice.
+        grep -q '^respawn_delay=5$' /etc/init.d/ustreamer
+        grep -q '^respawn_max=0$' /etc/init.d/ustreamer
+        ! grep -q '^supervise_daemon_args=' /etc/init.d/ustreamer
 
         # The test rootfs is assembled by apko, which does not run apk
         # scriptlets, so recreate the account that pre-install provides.

@@ -13,7 +13,8 @@ description="Lightweight and fast MJPEG-HTTP streamer"
 command="/usr/bin/ustreamer"
 command_user="${USTREAMER_USER}:${USTREAMER_GROUP}"
 supervisor=supervise-daemon
-supervise_daemon_args="--respawn-delay 5 --respawn-max 0"
+respawn_delay=5
+respawn_max=0
 output_log="/var/log/${RC_SVCNAME}.log"
 error_log="/var/log/${RC_SVCNAME}.log"
 
