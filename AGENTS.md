@@ -12,6 +12,8 @@ pipelines/          # reusable melange pipelines
 
 ## mise Configuration
 
+melange comes from Homebrew (`brew install melange`); no source checkout is needed.
+
 melange does **not** read its flags from `MELANGE_*` environment variables, so the local defaults (signing key, local repo, pipeline dir, QEMU runner) live in the `build` and `test` mise tasks:
 
 ```bash
@@ -519,6 +521,5 @@ While paused:
 
 ## Relevant sources
 
-- $HOME/repos/github.com/chainguard-dev/melange
 - $HOME/repos/github.com/chainguard-dev/actions
 - $HOME/repos/github.com/wolfi-dev/os

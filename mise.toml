@@ -1,6 +1,4 @@
 [env]
-_.path = ["~/repos/github.com/chainguard-dev/melange"]
-
 # melange reads none of its flags from MELANGE_*-style env vars, so the local
 # defaults (signing key, local repo, pipeline dir, qemu runner) live in the
 # build and test tasks instead.
