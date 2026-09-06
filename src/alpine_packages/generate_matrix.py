@@ -22,6 +22,21 @@ def get_local_packages() -> set[str]:
     return {f.stem for f in Path(".").glob("*.yaml") if not f.name.startswith(".")}
 
 
+def dependency_name(dep: str) -> str:
+    """Return the bare package name of an apk dependency specification.
+
+    Dependencies may carry a version constraint (`chip-sdk>=2025.7.0-r3`) or a
+    conflict marker (`!foo`). Without stripping those, a local package is not
+    recognized as a dependency and ends up in the same build phase as its
+    dependency instead of a later one.
+    """
+    name = dep.lstrip("!")
+    for index, char in enumerate(name):
+        if char in "<>=~":
+            return name[:index]
+    return name
+
+
 def extract_dependencies(
     pkg_data: dict, local_packages: set[str]
 ) -> tuple[list[str], list[str]]:
@@ -35,13 +50,13 @@ def extract_dependencies(
 
     # Runtime dependencies
     for dep in pkg_data.get("package", {}).get("dependencies", {}).get("runtime", []):
-        if dep in local_packages:
-            runtime_deps.add(dep)
+        if dependency_name(dep) in local_packages:
+            runtime_deps.add(dependency_name(dep))
 
     # Build dependencies
     for dep in pkg_data.get("environment", {}).get("contents", {}).get("packages", []):
-        if dep in local_packages:
-            build_deps.add(dep)
+        if dependency_name(dep) in local_packages:
+            build_deps.add(dependency_name(dep))
 
     return sorted(build_deps), sorted(runtime_deps)
 
