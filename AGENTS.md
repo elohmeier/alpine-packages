@@ -107,6 +107,25 @@ GitHub Actions builds packages on push to main using `chainguard-dev/actions/mel
 
 Required secret: `ABUILD_PRIVKEY` (RSA signing key)
 
+### Published drift
+
+A package is built only when its files changed in the push **and** its `version-rEPOCH` differs from the published APKINDEX. A single failing build job fails `build-gate`, which skips `publish` — so the packages that *did* build in that run are discarded, and since their files do not change again, CI never retries them. The repository then looks green while the published index silently lags the yaml files, and `apk upgrade` on homehub installs stale packages. That is how `chip-sdk`, `matter-server`, `openccu-container` and `presence-simulation` stayed unpublished from 2026-08-19 to 2026-09-06.
+
+Whenever a build job fails, check the published versions afterwards:
+
+```bash
+curl -sL https://elohmeier.github.io/alpine-packages/aarch64/APKINDEX.tar.gz |
+  tar -xzO APKINDEX | awk '/^P:/{p=substr($0,3)} /^V:/{print p"-"substr($0,3)}'
+```
+
+To rebuild everything that drifted, dispatch the workflow manually:
+
+```bash
+gh workflow run build.yaml --ref main
+```
+
+A `workflow_dispatch` has no `BASE_REF`, so the matrix generator skips change detection and selects every package whose version differs from the published one. Use the `rebuild_all` input only when a full rebuild is really wanted — it also risks one unrelated failure blocking `publish` again.
+
 ## Adding a New Package
 
 1. **Create package files**:
@@ -146,7 +165,7 @@ That's it. The workflow automatically:
 - Discovers new packages by scanning `*.yaml` files
 - Detects dependencies from `package.dependencies.runtime` and `environment.contents.packages`
 - Computes build order using topological sort
-- Builds only when files change AND version differs from published
+- Builds only when files change AND version differs from published (see [Published drift](#published-drift) for what happens when a build fails)
 
 ### Testing locally
 
