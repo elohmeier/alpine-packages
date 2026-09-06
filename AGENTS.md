@@ -109,7 +109,7 @@ Required secret: `ABUILD_PRIVKEY` (RSA signing key)
 
 ### Published drift
 
-A package is built only when its files changed in the push **and** its `version-rEPOCH` differs from the published APKINDEX. A single failing build job fails `build-gate`, which skips `publish` — so the packages that *did* build in that run are discarded, and since their files do not change again, CI never retries them. The repository then looks green while the published index silently lags the yaml files, and `apk upgrade` on homehub installs stale packages. That is how `chip-sdk`, `matter-server`, `openccu-container` and `presence-simulation` stayed unpublished from 2026-08-19 to 2026-09-06.
+A package is built only when its files changed in the push **and** its `version-rEPOCH` differs from the published APKINDEX. A single failing build job fails `build-gate`, which skips `publish` — so the packages that _did_ build in that run are discarded, and since their files do not change again, CI never retries them. The repository then looks green while the published index silently lags the yaml files, and `apk upgrade` on homehub installs stale packages. That is how `chip-sdk`, `matter-server`, `openccu-container` and `presence-simulation` stayed unpublished from 2026-08-19 to 2026-09-06.
 
 Whenever a build job fails, check the published versions afterwards:
 
