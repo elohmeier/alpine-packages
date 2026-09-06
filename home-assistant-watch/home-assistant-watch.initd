@@ -7,7 +7,8 @@ command="/usr/bin/home-assistant-watch"
 pidfile="/run/${RC_SVCNAME}.pid"
 
 supervisor=supervise-daemon
-supervise_daemon_args="--respawn-delay 5 --respawn-max 0"
+respawn_delay=5
+respawn_max=0
 output_log="/var/log/${RC_SVCNAME}.log"
 error_log="/var/log/${RC_SVCNAME}.log"
 

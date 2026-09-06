@@ -8,7 +8,9 @@ command_args="$MATTER_SERVER_OPTS"
 command_user="${MATTER_USER:-matter}"
 
 supervisor=supervise-daemon
-supervise_daemon_args="--respawn-delay 2 --respawn-max 5 --respawn-period 1800"
+respawn_delay=2
+respawn_max=5
+respawn_period=1800
 output_log="/var/log/${RC_SVCNAME}.log"
 error_log="/var/log/${RC_SVCNAME}.log"
 

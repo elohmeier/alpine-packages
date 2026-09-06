@@ -1,7 +1,7 @@
 package:
   name: home-assistant-watch
   version: 0.1.0
-  epoch: 0
+  epoch: 1
   description: "Watchdog: restart Home Assistant if its recorder stops writing"
   copyright:
     - license: Apache-2.0
@@ -72,6 +72,13 @@ test:
       runs: |
         sh -n /usr/bin/home-assistant-watch
         sh -n /etc/init.d/home-assistant-watch
+    - name: "Respawn settings use OpenRC variables"
+      runs: |
+        # supervise_daemon_args would append after the arguments OpenRC already
+        # generates, so supervise-daemon would see each flag twice.
+        grep -q '^respawn_delay=5$' /etc/init.d/home-assistant-watch
+        grep -q '^respawn_max=0$' /etc/init.d/home-assistant-watch
+        ! grep -q '^supervise_daemon_args=' /etc/init.d/home-assistant-watch
     - name: "Script prints usage with --help"
       runs: |
         /usr/bin/home-assistant-watch --help | grep -q "Usage"
