@@ -110,13 +110,16 @@ adapter_install() {
 
     jq -n --arg description "$OPNSENSE_CERT_DESCRIPTION" \
         --rawfile certificate "$install_cert" --rawfile private_key "$install_key" '
-        {cert: {action: "import", descr: $description,
+        {cert: {action: "import", cert_type: "server_cert", descr: $description,
           crt_payload: $certificate, prv_payload: $private_key}}
     ' >"$update_json"
     opnsense_request POST "/api/trust/cert/set/$opnsense_certificate_uuid" \
         "$response_json" "$update_json" || die "OPNsense rejected the certificate update"
-    jq -e '.result == "saved"' "$response_json" >/dev/null \
-        || die "OPNsense did not save the certificate update"
+    if ! jq -e '.result == "saved"' "$response_json" >/dev/null; then
+        validations=$(jq -c '.validations // {}' "$response_json" 2>/dev/null \
+            || printf '{}')
+        die "OPNsense did not save the certificate update; validations=$validations"
+    fi
 
     empty_json=$tmp_dir/empty.json
     printf '{}\n' >"$empty_json"
@@ -146,11 +149,17 @@ adapter_rollback() {
     jq -n --arg description "$OPNSENSE_CERT_DESCRIPTION" \
         --rawfile certificate "$opnsense_backup_cert" \
         --rawfile private_key "$opnsense_backup_key" '
-        {cert: {action: "import", descr: $description,
+        {cert: {action: "import", cert_type: "server_cert", descr: $description,
           crt_payload: $certificate, prv_payload: $private_key}}
     ' >"$update_json"
     opnsense_request POST "/api/trust/cert/set/$opnsense_certificate_uuid" \
         "$response_json" "$update_json" || return 1
+    if ! jq -e '.result == "saved"' "$response_json" >/dev/null; then
+        validations=$(jq -c '.validations // {}' "$response_json" 2>/dev/null \
+            || printf '{}')
+        log "ERROR: OPNsense did not save the certificate rollback; validations=$validations"
+        return 1
+    fi
     opnsense_request POST '/api/core/service/restart/webgui' \
         "$response_json" "$empty_json" || true
 }

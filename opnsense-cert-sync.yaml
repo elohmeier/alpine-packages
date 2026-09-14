@@ -1,7 +1,7 @@
 package:
   name: opnsense-cert-sync
   version: 0.1.3
-  epoch: 0
+  epoch: 1
   description: "Synchronize a cert-manager TLS Secret to the OPNsense Web GUI"
   copyright:
     - license: Apache-2.0
@@ -68,6 +68,9 @@ test:
         sh -n /usr/bin/opnsense-cert-sync
         sh -n /etc/periodic/hourly/opnsense-cert-sync
         /usr/bin/opnsense-cert-sync --help | grep -q "trust-current-certificate"
+        test "$(grep -c 'cert_type: \"server_cert\"' \
+          /usr/bin/opnsense-cert-sync)" -eq 2
+        grep -q 'validations=' /usr/bin/opnsense-cert-sync
     - name: "Parse certificate expiry with BusyBox date"
       runs: |
         test_dir=$(mktemp -d)

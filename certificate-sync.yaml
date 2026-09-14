@@ -1,7 +1,7 @@
 package:
   name: certificate-sync
   version: 0.1.0
-  epoch: 1
+  epoch: 2
   description: "Synchronize cert-manager TLS Secrets to infrastructure appliances"
   copyright:
     - license: Apache-2.0
@@ -88,6 +88,9 @@ test:
         sh -n /usr/share/certificate-sync/openccu-install
         sh -n /etc/periodic/hourly/certificate-sync
         /usr/bin/certificate-sync --help | grep -q -- '--target'
+        test "$(grep -c 'cert_type: \"server_cert\"' \
+          /usr/libexec/certificate-sync/opnsense.sh)" -eq 2
+        grep -q 'validations=' /usr/libexec/certificate-sync/opnsense.sh
     - name: "Emit safe unconfigured metrics"
       runs: |
         CERTIFICATE_SYNC_CONFIG=/does-not-exist \

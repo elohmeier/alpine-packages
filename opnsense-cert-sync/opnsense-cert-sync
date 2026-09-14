@@ -394,6 +394,7 @@ jq -n --arg description "$OPNSENSE_CERT_DESCRIPTION" \
     {
       cert: {
         action: "import",
+        cert_type: "server_cert",
         descr: $description,
         crt_payload: $certificate,
         prv_payload: $private_key
@@ -402,8 +403,11 @@ jq -n --arg description "$OPNSENSE_CERT_DESCRIPTION" \
 ' >"$update_json"
 opnsense_request POST "/api/trust/cert/set/$certificate_uuid" "$response_json" "$update_json" \
     || die "OPNsense rejected the certificate update"
-jq -e '.result == "saved"' "$response_json" >/dev/null \
-    || die "OPNsense did not save the certificate update"
+if ! jq -e '.result == "saved"' "$response_json" >/dev/null; then
+    validations=$(jq -c '.validations // {}' "$response_json" 2>/dev/null \
+        || printf '{}')
+    die "OPNsense did not save the certificate update; validations=$validations"
+fi
 
 empty_json=$tmp_dir/empty.json
 printf '{}\n' >"$empty_json"
@@ -441,6 +445,7 @@ if [ "$verified" -ne 1 ]; then
             {
               cert: {
                 action: "import",
+                cert_type: "server_cert",
                 descr: $description,
                 crt_payload: $certificate,
                 prv_payload: $private_key
@@ -450,6 +455,11 @@ if [ "$verified" -ne 1 ]; then
         opnsense_request POST "/api/trust/cert/set/$certificate_uuid" \
             "$response_json" "$update_json" \
             || die "cannot restore the previous OPNsense certificate"
+        if ! jq -e '.result == "saved"' "$response_json" >/dev/null; then
+            validations=$(jq -c '.validations // {}' "$response_json" 2>/dev/null \
+                || printf '{}')
+            die "cannot restore the previous OPNsense certificate; validations=$validations"
+        fi
         if ! opnsense_request POST '/api/core/service/restart/webgui' \
             "$response_json" "$empty_json"; then
             log "Web GUI rollback restart closed the API connection"
