@@ -1,8 +1,8 @@
 package:
   name: home-assistant-watch
-  version: 0.1.0
-  epoch: 1
-  description: "Watchdog: restart Home Assistant if its recorder stops writing"
+  version: 0.2.0
+  epoch: 2
+  description: "Bounded Home Assistant process, API and recorder recovery"
   copyright:
     - license: Apache-2.0
   dependencies:
@@ -10,6 +10,7 @@ package:
       - busybox
       - curl
       - openrc
+      - python3
   target-architecture:
     - x86_64
     - aarch64
@@ -49,6 +50,8 @@ pipeline:
         "${{targets.destdir}}"/etc/conf.d/home-assistant-watch
       install -Dm755 home-assistant-watch/home-assistant-watch \
         "${{targets.destdir}}"/usr/bin/home-assistant-watch
+      install -Dm755 home-assistant-watch/home-assistant-watch.py \
+        "${{targets.destdir}}"/usr/libexec/home-assistant-watch.py
 
 test:
   environment:
@@ -62,6 +65,7 @@ test:
         - busybox
         - curl
         - openrc
+        - python3
   pipeline:
     - name: "Verify files installed"
       runs: |
@@ -72,6 +76,7 @@ test:
       runs: |
         sh -n /usr/bin/home-assistant-watch
         sh -n /etc/init.d/home-assistant-watch
+        python3 -m py_compile /usr/libexec/home-assistant-watch.py
     - name: "Respawn settings use OpenRC variables"
       runs: |
         # supervise_daemon_args would append after the arguments OpenRC already

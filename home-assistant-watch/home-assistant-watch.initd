@@ -1,7 +1,7 @@
 #!/sbin/openrc-run
 
 name="home-assistant-watch"
-description="Restart Home Assistant if its recorder stops writing"
+description="Bounded Home Assistant process, API and recorder recovery"
 
 command="/usr/bin/home-assistant-watch"
 pidfile="/run/${RC_SVCNAME}.pid"

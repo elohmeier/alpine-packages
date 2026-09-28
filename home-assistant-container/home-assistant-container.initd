@@ -25,16 +25,29 @@ depend() {
 }
 
 start_pre() {
+    # Desired state survives a failed start. An explicit stop disarms recovery.
+    touch /run/home-assistant-container.wanted
     checkpath -d -m 0755 -o root:root "${CONTAINER_DATA_DIR}"
 
-    wait_for_podman || return 1
+    # Optional host-specific readiness gate (DNS, remote database, time sync).
+    # The watchdog can retry a failed gate within its normal attempt budget.
+    if [ -n "${CONTAINER_READY_COMMAND:-}" ]; then
+        timeout "${CONTAINER_READY_TIMEOUT:-120}" sh -c "$CONTAINER_READY_COMMAND" || return 1
+    fi
 
     # Mount squashfs if available (diskless mode), otherwise pull
     if ! ensure_rostore_mounted "$CONTAINER_NAME" "$CONTAINER_IMAGE"; then
         einfo "No rostore image found, will pull on first run"
     fi
 
+    CONTAINERS_STORAGE_CONF=$(get_storage_conf "$CONTAINER_IMAGE")
+    export CONTAINERS_STORAGE_CONF
+    wait_for_podman || return 1
+
     # Remove any existing container and clean up network state
+    if podman container exists "$CONTAINER_NAME" && [ -x /usr/bin/home-assistant-watch ]; then
+        timeout 45 /usr/bin/home-assistant-watch --capture >/dev/null 2>&1 || true
+    fi
     cleanup_container "$CONTAINER_NAME"
 }
 
@@ -45,7 +58,7 @@ start() {
     storage_conf=$(get_storage_conf "$CONTAINER_IMAGE")
 
     CONTAINERS_STORAGE_CONF="$storage_conf" \
-    podman run -d --rm --name "$CONTAINER_NAME" \
+    podman run -d --name "$CONTAINER_NAME" \
         -v "${CONTAINER_DATA_DIR}:/config" \
         -v /run/dbus:/run/dbus \
         -v /var/lib/bluetooth:/var/lib/bluetooth \
@@ -61,11 +74,24 @@ start() {
 }
 
 stop() {
+    rm -f /run/home-assistant-container.wanted
     ebegin "Stopping ${name}"
-    cleanup_container "$CONTAINER_NAME"
-    eend 0
+    # Retain exit state and logs until the next start captures them.
+    podman_run "$CONTAINER_IMAGE" container exists "$CONTAINER_NAME"
+    local exists=$?
+    if [ "$exists" = 1 ]; then
+        eend 0
+        return 0
+    elif [ "$exists" != 0 ]; then
+        eend "$exists"
+        return "$exists"
+    fi
+    podman_run "$CONTAINER_IMAGE" stop -t 30 "$CONTAINER_NAME" >/dev/null 2>&1
+    eend $?
 }
 
 status() {
+    CONTAINERS_STORAGE_CONF=$(get_storage_conf "$CONTAINER_IMAGE")
+    export CONTAINERS_STORAGE_CONF
     container_status "$CONTAINER_NAME"
 }

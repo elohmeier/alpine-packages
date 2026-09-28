@@ -8,3 +8,7 @@ CONTAINER_IMAGE="ghcr.io/home-assistant/home-assistant:@VERSION@"
 
 # Extra podman options (e.g., resource limits, additional mounts)
 #CONTAINER_EXTRA_OPTS="--memory=2g --cpus=2"
+
+# Optional host-specific pre-start gate. A timeout leaves recovery armed.
+#CONTAINER_READY_COMMAND="/usr/local/sbin/homehub-ha-ready"
+#CONTAINER_READY_TIMEOUT="120"
