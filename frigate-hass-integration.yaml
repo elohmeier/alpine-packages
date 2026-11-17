@@ -1,0 +1,67 @@
+package:
+  name: frigate-hass-integration
+  version: "5.15.7"
+  epoch: 0
+  description: "Home Assistant custom integration for Frigate NVR"
+  copyright:
+    - license: MIT
+  dependencies:
+    runtime:
+      - busybox-binsh
+  target-architecture:
+    - x86_64
+    - aarch64
+  scriptlets:
+    post-install: |
+      #!/bin/sh
+      chown -R homeassistant:homeassistant /var/lib/homeassistant/custom_components/frigate 2>/dev/null || true
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+      - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+    keyring:
+      - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+    packages:
+      - busybox
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/blakeblackshear/frigate-hass-integration.git
+      tag: v${{package.version}}
+      expected-commit: 46403b39678242a178051216c65accd36ce0f082
+
+  - runs: |
+      install -dm755 "${{targets.destdir}}/var/lib/homeassistant/custom_components"
+      cp -r custom_components/frigate \
+        "${{targets.destdir}}/var/lib/homeassistant/custom_components/"
+
+test:
+  environment:
+    contents:
+      repositories:
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+        - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+      keyring:
+        - https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub
+      packages:
+        - busybox
+        - python3
+  pipeline:
+    - runs: |
+        # Test that the custom component files exist
+        test -d /var/lib/homeassistant/custom_components/frigate
+        test -f /var/lib/homeassistant/custom_components/frigate/__init__.py
+        test -f /var/lib/homeassistant/custom_components/frigate/manifest.json
+    - runs: |
+        # Verify manifest.json is valid JSON and contains expected fields
+        python3 -c "
+        import json
+        with open('/var/lib/homeassistant/custom_components/frigate/manifest.json') as f:
+            m = json.load(f)
+            assert m['domain'] == 'frigate', 'Wrong domain'
+            assert m['version'] == '${{package.version}}', 'Version mismatch'
+            print(f\"Frigate integration v{m['version']} installed successfully\")
+        "
