@@ -1,7 +1,7 @@
 package:
   name: otbr
   version: 0.3.0
-  epoch: 13
+  epoch: 14
   description: "OpenThread Border Router"
   copyright:
     - license: BSD-3-Clause
@@ -137,3 +137,13 @@ test:
     - runs: |
         # Test that otbr-reset script is installed
         test -x /usr/bin/otbr-reset
+    - runs: |
+        # With an explicit OTBR_INFRA_IF, OpenRC evals OTBR_AGENT_OPTS
+        # verbatim: the radio URL must survive as one argument.
+        . /etc/conf.d/otbr-agent
+        eval "set -- $OTBR_AGENT_OPTS"
+        for last; do :; done
+        case "$last" in
+          *"&uart-flow-control") ;;
+          *) echo "radio URL split by eval: $last" >&2; exit 1 ;;
+        esac

@@ -28,4 +28,6 @@ OTBR_REST_PORT="8081"
 OTBR_RADIO_URL="spinel+hdlc+uart://${OTBR_RADIO_DEVICE}?uart-baudrate=${OTBR_RADIO_BAUDRATE}&uart-flow-control"
 
 # Agent options: -I <thread_if> -B <backbone_if> <radio_url>
-OTBR_AGENT_OPTS="-I $OTBR_THREAD_IF -B $OTBR_INFRA_IF --rest-listen-address $OTBR_REST_ADDR --rest-listen-port $OTBR_REST_PORT $OTBR_RADIO_URL"
+# OpenRC evals command_args, so the radio URL must stay quoted: an unquoted
+# "&uart-flow-control" backgrounds otbr-agent and drops UART flow control.
+OTBR_AGENT_OPTS="-I $OTBR_THREAD_IF -B $OTBR_INFRA_IF --rest-listen-address $OTBR_REST_ADDR --rest-listen-port $OTBR_REST_PORT \"$OTBR_RADIO_URL\""
